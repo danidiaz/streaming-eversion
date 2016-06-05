@@ -19,15 +19,45 @@ module Control.Foldl.Streaming (
 
 import           Data.Functor.Identity
 
-import           Control.Foldl (FoldM)
+import           Control.Foldl (FoldM(..))
 import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of)
 import qualified Streaming as Streaming
+import           Streaming.Prelude (yield)
 
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Free
+import           Control.Monad.Trans.Free as TF
+
+-----------------------------------------------------------------------------------------
+
+data Feed a = Input a | EOF
+
+-- What type could go here for efficiency?
+type Iteratee a = Free ((->) a)  
+
+evertedProducer :: forall a. Stream (Of a) (Iteratee (Feed a)) ()
+evertedProducer = do
+    r <- lift (liftF id)
+    case r of
+        Input a -> do
+            yield a
+            evertedProducer
+        EOF -> return ()
+
+type IterateeT a m = TF.FreeT ((->) a) m 
+
+evertedProducer' :: forall a m. Monad m => Stream (Of a) (IterateeT (Feed a) m) ()
+evertedProducer' = do
+    r <- lift (liftF id)
+    case r of
+        Input a -> do
+            yield a
+            evertedProducer'
+        EOF -> return ()
+
+-----------------------------------------------------------------------------------------
 
 newtype StreamConsumer a x = 
         StreamConsumer { consume :: forall m r. Monad m 
@@ -36,7 +66,15 @@ newtype StreamConsumer a x =
                        } 
 
 evert :: StreamConsumer a x -> FoldM Identity a x
-evert = undefined
+evert (StreamConsumer consumer) = FoldM step begin done
+    where
+    begin = return (consumer evertedProducer)
+    step s a = case s of
+        Pure _ -> error "should never happen"
+        Free f -> case f (Input a) of
+           Pure _ -> error "should never happen"
+           x -> return x
+    done = undefined
 
 newtype StreamConsumerM m a x = 
         StreamConsumerM { consumeM :: forall t r. MonadTrans t 
@@ -45,7 +83,11 @@ newtype StreamConsumerM m a x =
                         }
 
 evertM :: Monad m => StreamConsumerM m a x -> FoldM m a x
-evertM = undefined
+evertM (StreamConsumerM consumer) = FoldM step begin done
+    where
+    begin = return (consumer evertedProducer')
+    step = undefined
+    done = undefined
 
 newtype StreamConsumerIO m a x = 
         StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
