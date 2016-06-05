@@ -21,8 +21,7 @@ import           Data.Functor.Identity
 
 import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
-import           Streaming (Stream,Of)
-import qualified Streaming as Streaming
+import           Streaming (Stream,Of(..))
 import           Streaming.Prelude (yield)
 
 import           Control.Monad
@@ -63,7 +62,7 @@ evertedProducer' = do
 newtype StreamConsumer a x = 
         StreamConsumer { consume :: forall m r. Monad m 
                                  => Stream (Of a) m r 
-                                 -> m (x,r) 
+                                 -> m (Of x r) 
                        } 
 
 evert :: StreamConsumer a x -> Fold a x
@@ -78,13 +77,13 @@ evert (StreamConsumer consumer) = Fold step begin done
     done s = case s of
         Pure _ -> error "should never happen - unexpected stopped state"
         Free f -> case f EOF of
-            Pure (a,()) -> a
+            Pure (a :> ()) -> a
             Free _ -> error "should never happen - continuing after EOF"
 
 newtype StreamConsumerM m a x = 
         StreamConsumerM { consumeM :: forall t r. MonadTrans t 
                                    => Stream (Of a) (t m) r 
-                                   -> t m (x,r) 
+                                   -> t m (Of x r) 
                         }
 
 evertM :: Monad m => StreamConsumerM m a x -> FoldM m a x
@@ -97,7 +96,7 @@ evertM (StreamConsumerM consumer) = FoldM step begin done
 newtype StreamConsumerIO m a x = 
         StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
                                      => Stream (Of a) (t m) r 
-                                     -> t m (x,r)) 
+                                     -> t m (Of x r)) 
                          }
 
 evertIO :: MonadIO m => StreamConsumerIO m a x -> FoldM m a x 
