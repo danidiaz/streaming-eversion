@@ -50,7 +50,7 @@ type IterateeT a m = TF.FreeT ((->) a) m
 
 evertedProducer' :: forall a m. Monad m => Stream (Of a) (IterateeT (Feed a) m) ()
 evertedProducer' = do
-    r <- lift (liftF id)
+    r <- lift (TF.liftF id)
     case r of
         Input a -> do
             yield a
@@ -70,18 +70,16 @@ evert (StreamConsumer consumer) = Fold step begin done
     where
     begin = consumer evertedProducer
     step s a = case s of
-        Pure _ -> error "should never happen - unexpected stopped state"
-        Free f -> case f (Input a) of 
-           Pure _ -> error "should never happen - stopped after Input" 
-           Free x -> Free x
+        Pure _ -> error "Should never happen - unexpected stop."
+        Free f -> f (Input a)
     done s = case s of
-        Pure _ -> error "should never happen - unexpected stopped state"
+        Pure _ -> error "Should never happen - unexpected stop."
         Free f -> case f EOF of
             Pure (a :> ()) -> a
-            Free _ -> error "should never happen - continuing after EOF"
+            Free _ -> error "Should never happen: continue after EOF."
 
 newtype StreamConsumerM m a x = 
-        StreamConsumerM { consumeM :: forall t r. MonadTrans t 
+        StreamConsumerM { consumeM :: forall t r. (MonadTrans t, Monad (t m)) 
                                    => Stream (Of a) (t m) r 
                                    -> t m (Of x r) 
                         }
@@ -90,8 +88,21 @@ evertM :: Monad m => StreamConsumerM m a x -> FoldM m a x
 evertM (StreamConsumerM consumer) = FoldM step begin done
     where
     begin = return (consumer evertedProducer')
-    step = undefined
-    done = undefined
+    step (TF.FreeT ms) i = do
+        s <- ms
+        case s of
+            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Free f -> return (f (Input i))
+    done (TF.FreeT ms) = do
+        s <- ms
+        case s of 
+            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Free f -> do
+                let TF.FreeT ms' = f EOF
+                s' <- ms'
+                case s' of
+                    TF.Pure (a :> ()) -> return a
+                    TF.Free _ -> error "Should never happen: continue after EOF."
 
 newtype StreamConsumerIO m a x = 
         StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
@@ -100,7 +111,24 @@ newtype StreamConsumerIO m a x =
                          }
 
 evertIO :: MonadIO m => StreamConsumerIO m a x -> FoldM m a x 
-evertIO = undefined
+evertIO (StreamConsumerIO consumer) = FoldM step begin done
+    where
+    begin = return (consumer evertedProducer')
+    step (TF.FreeT ms) i = do
+        s <- ms
+        case s of
+            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Free f -> return (f (Input i))
+    done (TF.FreeT ms) = do
+        s <- ms
+        case s of 
+            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Free f -> do
+                let TF.FreeT ms' = f EOF
+                s' <- ms'
+                case s' of
+                    TF.Pure (a :> ()) -> return a
+                    TF.Free _ -> error "Should never happen: continue after EOF."
 
 newtype StreamTransducer a b = 
         StreamTransducer { transform :: forall m r. Monad m 
