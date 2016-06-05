@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 module Control.Foldl.Streaming (
         StreamConsumer(..)
     ,   evert
@@ -38,7 +39,7 @@ newtype StreamConsumerM m a x = StreamConsumerM { consumeM :: forall t r. MonadT
 evertM :: Monad m => StreamConsumerM m a x -> FoldM m a x
 evertM = undefined
 
-newtype StreamConsumerIO m a x = StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (x,r)) -> FoldM m a x }
+newtype StreamConsumerIO m a x = StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (x,r)) }
 
 evertIO :: MonadIO m => StreamConsumerIO m a x -> FoldM m a x 
 evertIO = undefined
