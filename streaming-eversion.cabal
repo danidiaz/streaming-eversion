@@ -36,7 +36,7 @@ Library
         void          >= 0.6               ,
         streaming     >= 0.1.4.2
     Exposed-Modules:
-        Control.Foldl.Streaming
+        Streaming.Eversion
     GHC-Options: -O2 -Wall
 
 test-suite tests
