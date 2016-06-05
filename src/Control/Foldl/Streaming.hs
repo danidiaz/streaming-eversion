@@ -22,10 +22,19 @@ import           Control.Monad.Trans.Free
 -- evert :: forall x a . (forall m r. Monad m => StreamOf a m r -> m (x,r)) -> FoldM Identity a x
 -- evert = undefined
 
-evert :: (forall m r. Monad m => Stream (Of a) m r -> m (x,r)) -> FoldM Identity a x
+newtype Consumer a x = Consumer { consume :: forall m r. Monad m => Stream (Of a) m r -> m (x,r) } 
+
+evert :: Consumer a x -> FoldM Identity a x
 evert = undefined
 
-evertIO :: MonadIO m 
-        => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (x,r)) 
-        -> FoldM m a r
-evertIO = undefined
+newtype ConsumerM m a x = ConsumerM { consumeM :: forall t r. MonadTrans t => Stream (Of a) (t m) r -> t m (x,r) }
+
+evertM :: Monad m => ConsumerM m a x -> FoldM m a x
+evertM = undefined
+
+newtype ConsumerMIO m a x = ConsumerMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (x,r)) -> FoldM m a x }
+
+evertMIO :: MonadIO m => ConsumerMIO m a x -> FoldM m a x 
+evertMIO = undefined
+
+
