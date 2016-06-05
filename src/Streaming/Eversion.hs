@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 -- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
-module Control.Foldl.Streaming (
+module Streaming.Eversion (
         StreamConsumer(..)
     ,   evert
     ,   StreamConsumerM(..)

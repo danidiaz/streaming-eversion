@@ -1,4 +1,4 @@
-Name: foldl-streaming
+Name: streaming-eversion
 Version: 0.1.0.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
@@ -7,7 +7,7 @@ License-File: LICENSE
 Copyright: 2015 Daniel Diaz
 Author: Daniel Diaz
 Maintainer: diaz_carrete@yahoo.com
-Bug-Reports: https://github.com/danidiaz/foldl-streaming/issues
+Bug-Reports: https://github.com/danidiaz/streaming-eversion/issues
 Synopsis: Creating push-based folds from pull-based stream consumers.
 Description: This package contains functions that create foldl folds from
              streaming streams, and fold transducers from stream transformers. 
@@ -19,7 +19,7 @@ Extra-Source-Files:
 
 Source-Repository head
     Type: git
-    Location: git@github.com:danidiaz/foldl-streaming.git
+    Location: git@github.com:danidiaz/streaming-eversion.git
 
 Library
     HS-Source-Dirs: src
@@ -52,5 +52,5 @@ test-suite tests
         split            >= 0.2.2          ,
         streaming                          ,
         foldl                              ,
-        foldl-streaming
+        streaming-eversion
 

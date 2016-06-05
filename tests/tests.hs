@@ -8,9 +8,9 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import qualified Control.Foldl           as Foldl
-import qualified Control.Foldl.Streaming as Foldl
 import Streaming
 import Streaming.Prelude
+import Streaming.Eversion
 
 main :: IO ()
 main = defaultMain tests
