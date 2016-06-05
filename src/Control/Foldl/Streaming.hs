@@ -19,7 +19,7 @@ module Control.Foldl.Streaming (
 
 import           Data.Functor.Identity
 
-import           Control.Foldl (FoldM(..))
+import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of)
 import qualified Streaming as Streaming
@@ -28,7 +28,8 @@ import           Streaming.Prelude (yield)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Free as TF
+import           Control.Monad.Free
+import qualified Control.Monad.Trans.Free as TF
 
 -----------------------------------------------------------------------------------------
 
@@ -65,16 +66,20 @@ newtype StreamConsumer a x =
                                  -> m (x,r) 
                        } 
 
-evert :: StreamConsumer a x -> FoldM Identity a x
-evert (StreamConsumer consumer) = FoldM step begin done
+evert :: StreamConsumer a x -> Fold a x
+evert (StreamConsumer consumer) = Fold step begin done
     where
-    begin = return (consumer evertedProducer)
+    begin = consumer evertedProducer
     step s a = case s of
-        Pure _ -> error "should never happen"
-        Free f -> case f (Input a) of
-           Pure _ -> error "should never happen"
-           x -> return x
-    done = undefined
+        Pure _ -> error "should never happen - unexpected stopped state"
+        Free f -> case f (Input a) of 
+           Pure _ -> error "should never happen - stopped after Input" 
+           Free x -> Free x
+    done s = case s of
+        Pure _ -> error "should never happen - unexpected stopped state"
+        Free f -> case f EOF of
+            Pure (a,()) -> a
+            Free _ -> error "should never happen - continuing after EOF"
 
 newtype StreamConsumerM m a x = 
         StreamConsumerM { consumeM :: forall t r. MonadTrans t 
