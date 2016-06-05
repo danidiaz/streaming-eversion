@@ -1,0 +1,40 @@
+Name: foldl-streaming
+Version: 0.1.0.0
+Cabal-Version: >=1.8.0.2
+Build-Type: Simple
+License: BSD3
+License-File: LICENSE
+Copyright: 2015 Daniel Diaz
+Author: Daniel Diaz
+Maintainer: diaz_carrete@yahoo.com
+Bug-Reports: https://github.com/danidiaz/foldl-streaming/issues
+Synopsis: Creating push-based folds from pull-based stream consumers.
+Description: This package contains functions that create foldl folds from
+             streaming streams, and fold transducers from stream transformers. 
+Category: Control
+
+Extra-Source-Files:
+    README.md
+    CHANGELOG
+
+Source-Repository head
+    Type: git
+    Location: git@github.com:danidiaz/foldl-streaming.git
+
+Library
+    HS-Source-Dirs: src
+    Build-Depends:
+        base          >= 4        && < 5   ,
+        transformers  >= 0.4.0.0           ,
+        bifunctors    >= 5                 ,
+        profunctors   >= 5                 ,
+        semigroups    >= 0.18              ,
+        semigroupoids >= 5.0               ,
+        foldl         >= 1.1.5             ,
+        comonad       >= 4                 ,
+        free          >= 4                 ,         
+        void          >= 0.6               ,
+        streaming     >= 0.1.4.2
+    Exposed-Modules:
+        Control.Foldl.Streaming
+    GHC-Options: -O2 -Wall
