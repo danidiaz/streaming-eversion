@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 module Streaming.Eversion (
@@ -20,15 +21,16 @@ module Streaming.Eversion (
 import           Data.Functor.Identity
 
 import           Control.Foldl (Fold(..),FoldM(..))
---import qualified Control.Foldl as Foldl
+import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of(..))
-import           Streaming.Prelude (yield)
+import           Streaming.Prelude (yield,fold)
 
---import           Control.Monad
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
+import           Control.Comonad
 
 -----------------------------------------------------------------------------------------
 
@@ -151,12 +153,23 @@ newtype StreamTransducer a b =
 
 data Pair a b = Pair !a !b
 
+data StreamState a b = Pristine (IterateeT (Feed a) (Stream (Of b) Identity) ())
+                     | Started  (Feed a ->  (IterateeT (Feed a) (Stream (Of b) Identity) ()))
+
 transduce :: StreamTransducer b a 
           -> (forall x. Fold a x -> Fold b x)
 transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
     where
-    step' = undefined
-    begin' = Pair somefold (TF.hoistFreeT transducer iterwrapper) 
+    step' (Pair innerfold (Pristine (TF.FreeT iter))) i = 
+        let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) iter
+--            x = _ `asTypeOf` freerest
+        in  case freerest of
+            TF.Pure _ -> error "should not happen"
+            TF.Free f -> step' (Pair nufold (Started f)) i
+    step' (Pair innerfold (Started func)) i = undefined
+--        let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) (func (Input i))
+--        in  undefined
+    begin' = Pair somefold (Pristine (TF.hoistFreeT transducer iterwrapper))
     done' = undefined
 
 newtype StreamTransducerM m a b = 
