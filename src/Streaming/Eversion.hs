@@ -20,11 +20,11 @@ module Streaming.Eversion (
 import           Data.Functor.Identity
 
 import           Control.Foldl (Fold(..),FoldM(..))
-import qualified Control.Foldl as Foldl
+--import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of(..))
 import           Streaming.Prelude (yield)
 
-import           Control.Monad
+--import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
@@ -55,6 +55,19 @@ evertedProducer' = do
         Input a -> do
             yield a
             evertedProducer'
+        EOF -> return ()
+
+-----------------------------------------------------------------------------------------
+
+-- type Iterwrapper a = IterateeT (Feed a) (Stream (Of a) Identity) ()
+
+iterwrapper :: IterateeT (Feed a) (Stream (Of a) Identity) ()
+iterwrapper = do
+    r <- liftF id 
+    case r of
+        Input a -> do
+            lift (yield a)
+            iterwrapper
         EOF -> return ()
 
 -----------------------------------------------------------------------------------------
@@ -136,9 +149,15 @@ newtype StreamTransducer a b =
                                      -> Stream (Of b) m r 
                          }
 
+data Pair a b = Pair !a !b
+
 transduce :: StreamTransducer b a 
-          -> (forall x. FoldM Identity a x -> FoldM Identity b x)
-transduce = undefined
+          -> (forall x. Fold a x -> Fold b x)
+transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
+    where
+    step' = undefined
+    begin' = Pair somefold (TF.hoistFreeT transducer iterwrapper) 
+    done' = undefined
 
 newtype StreamTransducerM m a b = 
         StreamTransducerM { transformM :: forall t r. (MonadTrans t) 
