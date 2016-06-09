@@ -162,15 +162,23 @@ transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
     where
     step' (Pair innerfold (Pristine (TF.FreeT iter))) i = 
         let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) iter
---            x = _ `asTypeOf` freerest
         in  case freerest of
             TF.Pure _ -> error "should not happen"
             TF.Free f -> step' (Pair nufold (Started f)) i
-    step' (Pair innerfold (Started func)) i = undefined
---        let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) (func (Input i))
---        in  undefined
+    step' (Pair innerfold (Started func)) i = 
+        let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) (TF.runFreeT (func (Input i)))
+        in  case freerest of
+            TF.Pure _ -> error "should not happen"
+            TF.Free f -> Pair nufold (Started f)
     begin' = Pair somefold (Pristine (TF.hoistFreeT transducer iterwrapper))
-    done' = undefined
+    done' (Pair innerfold (Pristine (TF.FreeT iter))) = 
+        let Identity (nufold :> freerest) = Foldl.purely Streaming.Prelude.fold (duplicate innerfold) iter
+        in  case freerest of
+            TF.Pure _ -> error "should not happen"
+            TF.Free f -> done' (Pair nufold (Started f))
+    done' (Pair innerfold (Started func)) = 
+        let Identity (finalresult :> _) = Foldl.purely Streaming.Prelude.fold innerfold (TF.runFreeT (func EOF))
+        in  finalresult
 
 newtype StreamTransducerM m a b = 
         StreamTransducerM { transformM :: forall t r. (MonadTrans t) 

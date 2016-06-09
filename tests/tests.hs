@@ -42,6 +42,18 @@ tests = testGroup "tests"
         "evert 04/toList"
         [1..10::Integer]
         (runIdentity (Foldl.foldM (evertM (StreamConsumerM S.toList)) [1..10]))
+    ,   testCaseEq
+        "transduce 01/empty"
+        ([]::[Integer])
+        (Foldl.fold (transduce (StreamTransducer id) Foldl.list) [])
+    ,   testCaseEq
+        "transduce 02/surroundempty"
+        ([]::[Integer])
+        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
+    ,   testCaseEq
+        "transduce 03/surround"
+        ([]::[Integer])
+        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [7,8,9])
     ]
     where
     testCaseEq :: (Eq a, Show a) => TestName -> a -> a -> TestTree
