@@ -1,6 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ViewPatterns #-}
 
 -- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 module Streaming.Eversion (
