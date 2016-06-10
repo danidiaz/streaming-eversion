@@ -176,8 +176,8 @@ data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
 
 newtype StreamTransducerM m a b = 
         StreamTransducerM { getTransducerM :: forall t r. (MonadTrans t, Monad (t m)) 
-                                           => Stream (Of b) (t m) r 
-                                           -> Stream (Of a) (t m) r 
+                                           => Stream (Of a) (t m) r 
+                                           -> Stream (Of b) (t m) r 
                           }
 
 transvertM :: Monad m 
@@ -186,18 +186,18 @@ transvertM :: Monad m
 transvertM (StreamTransducerM transvertr) somefold = FoldM step' begin' done'
     where
     begin' = return (Pair somefold (PristineM (transvertr evertedProducer')))
-    step' (Pair innerfold (PristineM pris)) i = 
-        undefined
---            step' (advance innerfold pris) i
+    step' (Pair innerfold (PristineM pris)) i = do
+        s <- advance innerfold pris 
+        step' s i
     step' (Pair innerfold (StartedM func)) i = 
         undefined
 --        case func (Input i) of
 --            Pure (Left ()) -> error "should never happen 1"
 --            Pure (Right (a, nexx)) -> advance (Foldl.fold (duplicate innerfold) [a]) nexx
 --            Free f -> Pair innerfold (StartedM f)
-    done' (Pair innerfold (PristineM pris)) = 
-        undefined
---       done' (advance innerfold pris) 
+    done' (Pair innerfold (PristineM pris)) = do
+        s <- advance innerfold pris 
+        done' s
     done' (Pair innerfold (StartedM func)) = 
         undefined
 --        case func EOF of
@@ -205,18 +205,26 @@ transvertM (StreamTransducerM transvertr) somefold = FoldM step' begin' done'
 --            Pure (Right (a, nexx)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) nexx)
 --            Free _ -> error "should never happen 2"
     advance innerfold pris = do 
-        r <- next pris
+        r <- TF.runFreeT (next pris) 
         case r of
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (duplicateM innerfold) [a]
+                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advance step1 future
             TF.Pure (Left ()) -> error "should never happen 3"
             TF.Free f -> return (Pair innerfold (StartedM f))
---    advancefinal innerfold pris =  
+    advancefinal innerfold pris = do
+        r <- TF.runFreeT (next pris) 
+        case r of
+            TF.Pure (Right (a,future)) -> do
+                undefined
+            TF.Pure (Left ()) -> error "should never happen 3"
+            TF.Free f -> do
+                undefined
 --        case next pris of
 --            Pure (Right (a,future)) -> advancefinal (Foldl.fold (duplicate innerfold) [a]) future
 --            Pure (Left ()) -> innerfold 
 --            Free _ -> error "should never happen 4"
+
 
 newtype StreamTransducerMIO m a b = 
         StreamTransducerMIO { getTransducerIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
