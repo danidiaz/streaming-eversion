@@ -4,13 +4,13 @@ Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 License: BSD3
 License-File: LICENSE
-Copyright: 2015 Daniel Diaz
+Copyright: 2016 Daniel Diaz
 Author: Daniel Diaz
 Maintainer: diaz_carrete@yahoo.com
 Bug-Reports: https://github.com/danidiaz/streaming-eversion/issues
-Synopsis: Creating push-based folds from pull-based stream consumers.
-Description: This package contains functions that create foldl folds from
-             streaming streams, and fold transducers from stream transformers. 
+Synopsis: Translating pull-based stream folds to push-based iteratees.
+Description: Functions that take pull-based folds from the "streaming" package 
+             and convert them to push-base folds from the "foldl" package.
 Category: Control
 
 Extra-Source-Files:
@@ -26,10 +26,7 @@ Library
     Build-Depends:
         base          >= 4        && < 5   ,
         transformers  >= 0.4.0.0           ,
-        bifunctors    >= 5                 ,
         profunctors   >= 5                 ,
-        semigroups    >= 0.18              ,
-        semigroupoids >= 5.0               ,
         foldl         >= 1.1.5             ,
         comonad       >= 4                 ,
         free          >= 4                 ,         
@@ -49,7 +46,6 @@ test-suite tests
         tasty            >= 0.10.1.1       ,
         tasty-hunit      >= 0.9.2          ,
         tasty-quickcheck >= 0.8.3.2        , 
-        split            >= 0.2.2          ,
         streaming                          ,
         foldl                              ,
         streaming-eversion
