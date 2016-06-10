@@ -159,7 +159,7 @@ transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
         case func EOF of
             Pure (Left ()) -> extract innerfold
             Pure (Right (a, nexx)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) nexx)
-            Free f -> error "should never happen 2"
+            Free _ -> error "should never happen 2"
     advance innerfold pris =  
         case next pris of
             Pure (Right (a,future)) -> advance (Foldl.fold (duplicate innerfold) [a]) future
