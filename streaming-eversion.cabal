@@ -10,7 +10,7 @@ Maintainer: diaz_carrete@yahoo.com
 Bug-Reports: https://github.com/danidiaz/streaming-eversion/issues
 Synopsis: Translating pull-based stream folds to push-based iteratees.
 Description: Functions that take pull-based folds from the "streaming" package 
-             and convert them to push-base folds from the "foldl" package.
+             and convert them to push-based folds from the "foldl" package.
 Category: Control
 
 Extra-Source-Files:
@@ -31,9 +31,11 @@ Library
         comonad       >= 4                 ,
         free          >= 4                 ,         
         void          >= 0.6               ,
-        streaming     >= 0.1.4.2
+        streaming     >= 0.1.4.2           ,
+        pipes         >= 4.2.0 
     Exposed-Modules:
         Streaming.Eversion
+        Streaming.Eversion.Pipes
     GHC-Options: -O2 -Wall
 
 test-suite tests

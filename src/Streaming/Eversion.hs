@@ -6,10 +6,13 @@
 module Streaming.Eversion (
         StreamFold(..)
     ,   evert
+    ,   withFold
     ,   StreamFoldM(..)
     ,   evertM
+    ,   withFoldM
     ,   StreamFoldMIO(..)
     ,   evertMIO
+    ,   withFoldMIO
     ,   StreamTransducer(..)
     ,   transvert
     ,   StreamTransducerM(..)
@@ -24,6 +27,7 @@ import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of(..))
 import           Streaming.Prelude (yield,fold,next)
+import qualified Streaming.Prelude as S
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -39,24 +43,24 @@ data Feed a = Input a | EOF
 -- What type could go here for efficiency?
 type Iteratee a = Free ((->) a)  
 
-evertedProducer :: forall a. Stream (Of a) (Iteratee (Feed a)) ()
-evertedProducer = do
+evertedStream :: forall a. Stream (Of a) (Iteratee (Feed a)) ()
+evertedStream = do
     r <- lift (liftF id)
     case r of
         Input a -> do
             yield a
-            evertedProducer
+            evertedStream
         EOF -> return ()
 
 type IterateeT a m = TF.FreeT ((->) a) m 
 
-evertedProducer' :: forall a m. Monad m => Stream (Of a) (IterateeT (Feed a) m) ()
-evertedProducer' = do
+evertedStreamM :: forall a m. Monad m => Stream (Of a) (IterateeT (Feed a) m) ()
+evertedStreamM = do
     r <- lift (TF.liftF id)
     case r of
         Input a -> do
             yield a
-            evertedProducer'
+            evertedStreamM
         EOF -> return ()
 
 -----------------------------------------------------------------------------------------
@@ -67,10 +71,13 @@ newtype StreamFold a x =
                              -> m (Of x r) 
                    } 
 
+withFold :: Fold a x -> StreamFold a x  
+withFold sf = StreamFold (Foldl.purely S.fold sf) 
+
 evert :: StreamFold a x -> Fold a x
 evert (StreamFold consumer) = Fold step begin done
     where
-    begin = consumer evertedProducer
+    begin = consumer evertedStream
     step s a = case s of
         Pure _ -> error "Should never happen - unexpected stop."
         Free f -> f (Input a)
@@ -80,16 +87,20 @@ evert (StreamFold consumer) = Fold step begin done
             Pure (a :> ()) -> a
             Free _ -> error "Should never happen - continue after EOF."
 
+
 newtype StreamFoldM m a x = 
         StreamFoldM { consumeM :: forall t r. (MonadTrans t, Monad (t m)) 
                                => Stream (Of a) (t m) r 
                                -> t m (Of x r) 
                     }
 
+withFoldM :: Monad m => FoldM m a x -> StreamFoldM m a x  
+withFoldM sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
+
 evertM :: Monad m => StreamFoldM m a x -> FoldM m a x
 evertM (StreamFoldM consumer) = FoldM step begin done
     where
-    begin = return (consumer evertedProducer')
+    begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
         s <- ms
         case s of
@@ -115,7 +126,7 @@ newtype StreamFoldMIO m a x =
 evertMIO :: MonadIO m => StreamFoldMIO m a x -> FoldM m a x 
 evertMIO (StreamFoldMIO consumer) = FoldM step begin done
     where
-    begin = return (consumer evertedProducer')
+    begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
         s <- ms
         case s of
@@ -132,6 +143,9 @@ evertMIO (StreamFoldMIO consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error "Should never happen: continue after EOF."
 
+withFoldMIO :: MonadIO m => FoldM m a x -> StreamFoldM m a x  
+withFoldMIO sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
+
 newtype StreamTransducer a b = 
         StreamTransducer { transduce :: forall m r. Monad m 
                                      => Stream (Of a) m r 
@@ -147,7 +161,7 @@ transvert :: StreamTransducer b a
           -> (forall x. Fold a x -> Fold b x)
 transvert (StreamTransducer transvertr) somefold = Fold step begin' done
     where
-    begin' = Pair somefold (Pristine (transvertr evertedProducer))
+    begin' = Pair somefold (Pristine (transvertr evertedStream))
     step (Pair innerfold (Pristine pris)) i = step (advance innerfold pris) i
     step (Pair innerfold (Waiting func)) i = 
         case func (Input i) of
@@ -185,7 +199,7 @@ transvertM :: Monad m
            -> (forall x . FoldM m a x -> FoldM m b x)
 transvertM (StreamTransducerM transvertr) somefold = FoldM step begin' done
     where
-    begin' = return (Pair somefold (PristineM (transvertr evertedProducer')))
+    begin' = return (Pair somefold (PristineM (transvertr evertedStreamM)))
     step (Pair innerfold (PristineM pris)) i = do
         s <- advance innerfold pris 
         step s i
@@ -239,7 +253,7 @@ transvertMIO :: (MonadIO m)
              -> (forall x . FoldM m a x -> FoldM m b x)
 transvertMIO (StreamTransducerMIO transvertr) somefold = FoldM step begin' done
     where
-    begin' = return (Pair somefold (PristineM (transvertr evertedProducer')))
+    begin' = return (Pair somefold (PristineM (transvertr evertedStreamM)))
     step (Pair innerfold (PristineM pris)) i = do
         s <- advance innerfold pris 
         step s i
