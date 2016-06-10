@@ -48,12 +48,12 @@ tests = testGroup "tests"
         (Foldl.fold (transduce (StreamTransducer id) Foldl.list) [])
     ,   testCaseEq
         "transduce 02/surroundempty"
-        ([]::[Integer])
+        ([1,2,3,4]::[Integer])
         (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
     ,   testCaseEq
         "transduce 03/surround"
-        ([]::[Integer])
-        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [7,8,9])
+        ([1,2,3,4,5,6]::[Integer])
+        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) Foldl.list) [3,4])
     ]
     where
     testCaseEq :: (Eq a, Show a) => TestName -> a -> a -> TestTree

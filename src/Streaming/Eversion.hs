@@ -147,16 +147,29 @@ transduce :: StreamTransducer b a
           -> (forall x. Fold a x -> Fold b x)
 transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
     where
-    step' (Pair innerfold (Pristine pris)) i = undefined
-    step' (Pair innerfold (Started func)) i = undefined
+    step' (Pair innerfold (Pristine pris)) i = step' (advance innerfold pris) i
+    step' (Pair innerfold (Started func)) i = 
+        case func (Input i) of
+            Pure (Left ()) -> error "should never happen 1"
+            Pure (Right (a, nexx)) -> advance (Foldl.fold (duplicate innerfold) [a]) nexx
+            Free f -> Pair innerfold (Started f)
     begin' = Pair somefold (Pristine (transducer evertedProducer))
-    done' (Pair innerfold (Pristine pris)) = undefined
-    done' (Pair innerfold (Started func)) = undefined
+    done' (Pair innerfold (Pristine pris)) = done' (advance innerfold pris) 
+    done' (Pair innerfold (Started func)) =
+        case func EOF of
+            Pure (Left ()) -> extract innerfold
+            Pure (Right (a, nexx)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) nexx)
+            Free f -> error "should never happen 2"
     advance innerfold pris =  
         case next pris of
             Pure (Right (a,future)) -> advance (Foldl.fold (duplicate innerfold) [a]) future
-            Pure (Left ()) -> error "should never happen"
+            Pure (Left ()) -> error "should never happen 3"
             Free f -> Pair innerfold (Started f)
+    advancefinal innerfold pris =  
+        case next pris of
+            Pure (Right (a,future)) -> advancefinal (Foldl.fold (duplicate innerfold) [a]) future
+            Pure (Left ()) -> innerfold 
+            Free _ -> error "should never happen 4"
 
 newtype StreamTransducerM m a b = 
         StreamTransducerM { transformM :: forall t r. (MonadTrans t) 
