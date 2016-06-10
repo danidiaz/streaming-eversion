@@ -8,14 +8,14 @@ module Streaming.Eversion (
     ,   evert
     ,   StreamConsumerM(..)
     ,   evertM
-    ,   StreamConsumerIO(..)
-    ,   evertIO
+    ,   StreamConsumerMIO(..)
+    ,   evertMIO
     ,   StreamTransducer(..)
-    ,   transduce
+    ,   transvert
     ,   StreamTransducerM(..)
-    ,   transduceM
-    ,   StreamTransducerIO(..)
-    ,   transduceIO
+    ,   transvertM
+    ,   StreamTransducerMIO(..)
+    ,   transvertMIO
     ) where
 
 import           Data.Functor.Identity
@@ -106,14 +106,14 @@ evertM (StreamConsumerM consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error "Should never happen: continue after EOF."
 
-newtype StreamConsumerIO m a x = 
-        StreamConsumerIO { consumeIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
-                                     => Stream (Of a) (t m) r 
-                                     -> t m (Of x r)) 
+newtype StreamConsumerMIO m a x = 
+        StreamConsumerMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
+                                       => Stream (Of a) (t m) r 
+                                       -> t m (Of x r)) 
                          }
 
-evertIO :: MonadIO m => StreamConsumerIO m a x -> FoldM m a x 
-evertIO (StreamConsumerIO consumer) = FoldM step begin done
+evertMIO :: MonadIO m => StreamConsumerMIO m a x -> FoldM m a x 
+evertMIO (StreamConsumerMIO consumer) = FoldM step begin done
     where
     begin = return (consumer evertedProducer')
     step (TF.FreeT ms) i = do
@@ -133,9 +133,9 @@ evertIO (StreamConsumerIO consumer) = FoldM step begin done
                     TF.Free _ -> error "Should never happen: continue after EOF."
 
 newtype StreamTransducer a b = 
-        StreamTransducer { transform :: forall m r. Monad m 
-                                     => Stream (Of a) m r 
-                                     -> Stream (Of b) m r 
+        StreamTransducer { getTransducer :: forall m r. Monad m 
+                                         => Stream (Of a) m r 
+                                         -> Stream (Of b) m r 
                          }
 
 data Pair a b = Pair !a !b
@@ -143,17 +143,17 @@ data Pair a b = Pair !a !b
 data StreamState a b = Pristine (Stream (Of b) (Iteratee (Feed a)) ())
                      | Started  (Feed a -> Iteratee (Feed a) (Either () (b, Stream (Of b) (Iteratee (Feed a)) ())))
 
-transduce :: StreamTransducer b a 
+transvert :: StreamTransducer b a 
           -> (forall x. Fold a x -> Fold b x)
-transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
+transvert (StreamTransducer transvertr) somefold = Fold step' begin' done'
     where
+    begin' = Pair somefold (Pristine (transvertr evertedProducer))
     step' (Pair innerfold (Pristine pris)) i = step' (advance innerfold pris) i
     step' (Pair innerfold (Started func)) i = 
         case func (Input i) of
             Pure (Left ()) -> error "should never happen 1"
             Pure (Right (a, nexx)) -> advance (Foldl.fold (duplicate innerfold) [a]) nexx
             Free f -> Pair innerfold (Started f)
-    begin' = Pair somefold (Pristine (transducer evertedProducer))
     done' (Pair innerfold (Pristine pris)) = done' (advance innerfold pris) 
     done' (Pair innerfold (Started func)) =
         case func EOF of
@@ -171,24 +171,60 @@ transduce (StreamTransducer transducer) somefold = Fold step' begin' done'
             Pure (Left ()) -> innerfold 
             Free _ -> error "should never happen 4"
 
+data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
+                        | StartedM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
+
 newtype StreamTransducerM m a b = 
-        StreamTransducerM { transformM :: forall t r. (MonadTrans t) 
-                                       => Stream (Of b) (t m) r 
-                                       -> Stream (Of a) (t m) r 
+        StreamTransducerM { getTransducerM :: forall t r. (MonadTrans t, Monad (t m)) 
+                                           => Stream (Of b) (t m) r 
+                                           -> Stream (Of a) (t m) r 
                           }
 
-transduceM :: Monad m 
+transvertM :: Monad m 
            => StreamTransducerM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
-transduceM = undefined
+transvertM (StreamTransducerM transvertr) somefold = FoldM step' begin' done'
+    where
+    begin' = return (Pair somefold (PristineM (transvertr evertedProducer')))
+    step' (Pair innerfold (PristineM pris)) i = 
+        undefined
+--            step' (advance innerfold pris) i
+    step' (Pair innerfold (StartedM func)) i = 
+        undefined
+--        case func (Input i) of
+--            Pure (Left ()) -> error "should never happen 1"
+--            Pure (Right (a, nexx)) -> advance (Foldl.fold (duplicate innerfold) [a]) nexx
+--            Free f -> Pair innerfold (StartedM f)
+    done' (Pair innerfold (PristineM pris)) = 
+        undefined
+--       done' (advance innerfold pris) 
+    done' (Pair innerfold (StartedM func)) = 
+        undefined
+--        case func EOF of
+--            Pure (Left ()) -> extract innerfold
+--            Pure (Right (a, nexx)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) nexx)
+--            Free _ -> error "should never happen 2"
+    advance innerfold pris = do 
+        r <- next pris
+        case r of
+            TF.Pure (Right (a,future)) -> do
+                step1 <- Foldl.foldM (duplicateM innerfold) [a]
+                advance step1 future
+            TF.Pure (Left ()) -> error "should never happen 3"
+            TF.Free f -> return (Pair innerfold (StartedM f))
+--    advancefinal innerfold pris =  
+--        case next pris of
+--            Pure (Right (a,future)) -> advancefinal (Foldl.fold (duplicate innerfold) [a]) future
+--            Pure (Left ()) -> innerfold 
+--            Free _ -> error "should never happen 4"
 
-newtype StreamTransducerIO m a b = 
-        StreamTransducerIO { transformIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
-                                         => Stream (Of b) (t m) r 
-                                         -> Stream (Of a) (t m) r 
-                           }
+newtype StreamTransducerMIO m a b = 
+        StreamTransducerMIO { getTransducerIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
+                                              => Stream (Of b) (t m) r 
+                                              -> Stream (Of a) (t m) r 
+                            }
 
-transduceIO :: Monad m 
-            => StreamTransducerIO m b a 
-            -> (forall x . FoldM m a x -> FoldM m b x)
-transduceIO = undefined
+transvertMIO :: Monad m 
+             => StreamTransducerMIO m b a 
+             -> (forall x . FoldM m a x -> FoldM m b x)
+transvertMIO = undefined
