@@ -29,39 +29,39 @@ tests = testGroup "tests"
         testCaseEq
         "evert 01/empty"
         ([]::[Integer])
-        (Foldl.fold (evert (StreamConsumer S.toList)) [])
+        (Foldl.fold (evert (StreamFold S.toList)) [])
     ,   testCaseEq
         "evert 02/toList"
         [1..10::Integer]
-        (Foldl.fold (evert (StreamConsumer S.toList)) [1..10])
+        (Foldl.fold (evert (StreamFold S.toList)) [1..10])
     ,   testCaseEq
         "evert 03/empty"
         ([]::[Integer])
-        (runIdentity (Foldl.foldM (evertM (StreamConsumerM S.toList)) []))
+        (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) []))
     ,   testCaseEq
         "evert 04/toList"
         [1..10::Integer]
-        (runIdentity (Foldl.foldM (evertM (StreamConsumerM S.toList)) [1..10]))
+        (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) [1..10]))
     ,   testCaseEq
         "transduce 01/empty"
         ([]::[Integer])
-        (Foldl.fold (transduce (StreamTransducer id) Foldl.list) [])
+        (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [])
     ,   testCaseEq
         "transduce 01b/notempty"
         ([1..5]::[Integer])
-        (Foldl.fold (transduce (StreamTransducer id) Foldl.list) [1..5])
+        (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [1..5])
     ,   testCaseEq
         "transduce 02/surroundempty"
         ([1,2,3,4]::[Integer])
-        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
+        (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
     ,   testCaseEq
         "transduce 03/surround"
         ([1,2,3,4,5,6]::[Integer])
-        (Foldl.fold (transduce (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) Foldl.list) [3,4])
+        (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) Foldl.list) [3,4])
     ,   testCaseEq
         "transduce 04/group"
         ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
-        (Foldl.fold (transduce (StreamTransducer (mapped S.toList . S.group)) Foldl.list) [1,1,2,2,2,3,3,3])
+        (Foldl.fold (transvert (StreamTransducer (mapped S.toList . S.group)) Foldl.list) [1,1,2,2,2,3,3,3])
     ]
     where
     testCaseEq :: (Eq a, Show a) => TestName -> a -> a -> TestTree
