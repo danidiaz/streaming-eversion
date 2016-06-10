@@ -1,14 +1,11 @@
 module Main where
 
 import Data.Functor.Identity
-import Data.Char
-import Data.Monoid
-import Data.Bifunctor
+import Data.IORef
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
+-- import Test.Tasty.QuickCheck
 
-import           Control.Foldl           
 import qualified Control.Foldl           as Foldl
 import Streaming
 import qualified Streaming.Prelude       as S
@@ -17,57 +14,143 @@ import Streaming.Eversion
 main :: IO ()
 main = defaultMain tests
 
--- runStream :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
--- runStream = Foldl.purely S.fold
--- 
--- runStreamM :: Monad m => FoldM m a b -> Stream (Of a) m r -> m (Of b r)
--- runStreamM = Foldl.impurely S.foldM
-
 tests :: TestTree
 tests = testGroup "tests" 
     [ 
-        testCaseEq
-        "evert 01/empty"
-        ([]::[Integer])
-        (Foldl.fold (evert (StreamFold S.toList)) [])
-    ,   testCaseEq
-        "evert 02/toList"
-        [1..10::Integer]
-        (Foldl.fold (evert (StreamFold S.toList)) [1..10])
-    ,   testCaseEq
-        "evert 03/empty"
-        ([]::[Integer])
-        (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) []))
-    ,   testCaseEq
-        "evert 04/toList"
-        [1..10::Integer]
-        (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) [1..10]))
-    ,   testCaseEq
-        "transduce 01/empty"
-        ([]::[Integer])
-        (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [])
-    ,   testCaseEq
-        "transduce 01b/notempty"
-        ([1..5]::[Integer])
-        (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [1..5])
-    ,   testCaseEq
-        "transduce 02/surroundempty"
-        ([1,2,3,4]::[Integer])
-        (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
-    ,   testCaseEq
-        "transduce 03/surround"
-        ([1,2,3,4,5,6]::[Integer])
-        (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) Foldl.list) [3,4])
-    ,   testCaseEq
-        "transduce 04/group"
-        ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
-        (Foldl.fold (transvert (StreamTransducer (mapped S.toList . S.group)) Foldl.list) [1,1,2,2,2,3,3,3])
+        testGroup "evert"
+        [
+            testCaseEq
+            "empty"
+            ([]::[Integer])
+            (Foldl.fold (evert (StreamFold S.toList)) [])
+        ,   testCaseEq
+            "toList"
+            [1..10::Integer]
+            (Foldl.fold (evert (StreamFold S.toList)) [1..10])
+        ]
+    ,   testGroup "evertM"
+        [
+            testCaseEq
+            "empty"
+            ([]::[Integer])
+            (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) []))
+        ,   testCaseEq
+            "toList"
+            [1..10::Integer]
+            (runIdentity (Foldl.foldM (evertM (StreamFoldM S.toList)) [1..10]))
+        ,   testCaseEqIO
+            "ref"
+            (True,[1..10::Integer])
+            (do ref <- newIORef False 
+                res <- Foldl.foldM (evertM (StreamFoldM (\s -> S.toList s <* lift (writeIORef ref True)))) [1..10]
+                refval <- readIORef ref
+                return (refval,res))
+        ]
+    ,   testGroup "evertMIO"
+        [
+            testCaseEqIO
+            "empty"
+            ([]::[Integer])
+            (Foldl.foldM (evertMIO (StreamFoldMIO S.toList)) [])
+        ,   testCaseEqIO
+            "toList"
+            [1..10::Integer]
+            (Foldl.foldM (evertMIO (StreamFoldMIO S.toList)) [1..10])
+        ,   testCaseEqIO
+            "ref"
+            (True,[1..10::Integer])
+            (do ref <- newIORef False 
+                res <- Foldl.foldM (evertMIO (StreamFoldMIO (\s -> S.toList s <* liftIO (writeIORef ref True)))) [1..10]
+                refval <- readIORef ref
+                return (refval,res))
+        ]
+    ,   testGroup "transduce"
+        [
+            testCaseEq
+            "empty"
+            ([]::[Integer])
+            (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [])
+        ,   testCaseEq
+            "notempty"
+            ([1..5]::[Integer])
+            (Foldl.fold (transvert (StreamTransducer id) Foldl.list) [1..5])
+        ,   testCaseEq
+            "surroundempty"
+            ([1,2,3,4]::[Integer])
+            (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) Foldl.list) [])
+        ,   testCaseEq
+            "surround"
+            ([1,2,3,4,5,6]::[Integer])
+            (Foldl.fold (transvert (StreamTransducer (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) Foldl.list) [3,4])
+        ,   testCaseEq
+            "group"
+            ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
+            (Foldl.fold (transvert (StreamTransducer (mapped S.toList . S.group)) Foldl.list) [1,1,2,2,2,3,3,3])
+        ]
+    ,   testGroup "transduceM"
+        [
+        testCaseEq  
+            "empty"
+            ([]::[Integer])
+            (runIdentity (Foldl.foldM (transvertM (StreamTransducerM id) (Foldl.generalize Foldl.list)) []))
+        ,   testCaseEq
+            "notempty"
+            ([1..5]::[Integer])
+            (runIdentity (Foldl.foldM (transvertM (StreamTransducerM id) (Foldl.generalize Foldl.list)) [1..5]))
+        ,   testCaseEq
+            "surroundempty"
+            ([1,2,3,4]::[Integer])
+            (runIdentity (Foldl.foldM (transvertM (StreamTransducerM (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) (Foldl.generalize Foldl.list)) []))
+        ,   testCaseEq
+            "surround"
+            ([1,2,3,4,5,6]::[Integer])
+            (runIdentity (Foldl.foldM (transvertM (StreamTransducerM (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) (Foldl.generalize Foldl.list)) [3,4]))
+        ,   testCaseEq
+            "group"
+            ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
+            (runIdentity (Foldl.foldM (transvertM (StreamTransducerM (mapped S.toList . S.group)) (Foldl.generalize Foldl.list)) [1,1,2,2,2,3,3,3]))
+        ,   testCaseEqIO
+            "ref"
+            (True,[1,2,3,4,5,6]::[Integer])
+            (do ref <- newIORef False 
+                res <- Foldl.foldM (transvertM (StreamTransducerM (\s -> S.yield 1 *> S.yield 2 *> (lift (lift (writeIORef ref True))) *> s <* S.yield 5 <* S.yield 6)) (Foldl.generalize Foldl.list)) [3,4]
+                refval <- readIORef ref
+                return (refval,res))
+        ]
+    ,   testGroup "transduceMIO"
+        [
+            testCaseEqIO
+            "empty"
+            ([]::[Integer])
+            (Foldl.foldM (transvertMIO (StreamTransducerMIO id) (Foldl.generalize Foldl.list)) [])
+        ,   testCaseEqIO
+            "notempty"
+            ([1..5]::[Integer])
+            (Foldl.foldM (transvertMIO (StreamTransducerMIO id) (Foldl.generalize Foldl.list)) [1..5])
+        ,   testCaseEqIO
+            "surroundempty"
+            ([1,2,3,4]::[Integer])
+            (Foldl.foldM (transvertMIO (StreamTransducerMIO (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 3 <* S.yield 4)) (Foldl.generalize Foldl.list)) [])
+        ,   testCaseEqIO
+            "surround"
+            ([1,2,3,4,5,6]::[Integer])
+            (Foldl.foldM (transvertMIO (StreamTransducerMIO (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6)) (Foldl.generalize Foldl.list)) [3,4])
+        ,   testCaseEqIO
+            "group"
+            ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
+            (Foldl.foldM (transvertMIO (StreamTransducerMIO (mapped S.toList . S.group)) (Foldl.generalize Foldl.list)) [1,1,2,2,2,3,3,3])
+        ,   testCaseEqIO
+            "ref"
+            (True,[1,2,3,4,5,6]::[Integer])
+            (do ref <- newIORef False 
+                res <- Foldl.foldM (transvertMIO (StreamTransducerMIO (\s -> S.yield 1 *> S.yield 2 *> (liftIO (writeIORef ref True)) *> s <* S.yield 5 <* S.yield 6)) (Foldl.generalize Foldl.list)) [3,4]
+                refval <- readIORef ref
+                return (refval,res))
+        ]
     ]
     where
     testCaseEq :: (Eq a, Show a) => TestName -> a -> a -> TestTree
     testCaseEq name a1 a2 = testCase name (assertEqual "" a1 a2)
-
-
-
-
+    testCaseEqIO :: (Eq a, Show a) => TestName -> a -> IO a -> TestTree
+    testCaseEqIO name a1 action = testCase name (action >>= assertEqual "" a1)
 
