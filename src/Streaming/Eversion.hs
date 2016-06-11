@@ -1,16 +1,18 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | The pull-based-to-push-based transformations work on functions that are 
--- polymorphic over a monad transformer.  
--- 
--- Because of this, some of the type signatures in this
--- module look scary, but actually many (suitably polymorphic) operations on
--- 'Stream's will unify with them.
--- 
--- To get "interruptible" operations that can exit early with an error, put a
--- 'ExceptT' transformer just below the polymorphic monad transformer. 
---
--- Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+
+{-| The pull-based-to-push-based transformations work on functions that are 
+    polymorphic over a monad transformer.  
+    
+    Because of this, some of the type signatures in this
+    module look scary, but actually many (suitably polymorphic) operations on
+    'Stream's will unify with them.
+   
+    To get "interruptible" operations that can exit early with an error, put a
+    'ExceptT' transformer just below the polymorphic monad transformer. 
+   
+    Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+-}
 
 module Streaming.Eversion (
         -- * Stream folds
@@ -49,6 +51,14 @@ import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
 import           Control.Monad.Trans.Except
 import           Control.Comonad
+
+{- $setup
+>>  import           Control.Foldl (Fold(..),FoldM(..))
+>>  import qualified Control.Foldl as L
+>>> import           Streaming (Stream,Of(..))
+>>> import           Streaming.Prelude (yield,next)
+>>> import qualified Streaming.Prelude as S
+-}
 
 -----------------------------------------------------------------------------------------
 
