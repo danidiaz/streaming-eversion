@@ -109,7 +109,7 @@ toStreamTransducerM (PipeTransducerM pt) =
     StreamTransducerM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 toPipeTransducerM :: StreamTransducerM m a b -> PipeTransducerM m a b
-toPipeTransducerM (StreamTransducerM st)= 
+toPipeTransducerM (StreamTransducerM st) = 
     PipeTransducerM (\producer -> Pipes.Prelude.unfoldr Streaming.Prelude.next (st (Streaming.Prelude.unfoldr Pipes.next producer)))
 
 

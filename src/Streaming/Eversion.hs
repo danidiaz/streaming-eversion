@@ -71,6 +71,12 @@ newtype StreamFold a x =
                              -> m (Of x r) 
                    } 
 
+stoppedBeforeEOF :: String
+stoppedBeforeEOF = "Stopped before receiving EOF."
+
+continuedAfterEOF :: String
+continuedAfterEOF = "Continued after receiving EOF."
+
 withFold :: Fold a x -> StreamFold a x  
 withFold sf = StreamFold (Foldl.purely S.fold sf) 
 
@@ -79,13 +85,13 @@ evert (StreamFold consumer) = Fold step begin done
     where
     begin = consumer evertedStream
     step s a = case s of
-        Pure _ -> error "Should never happen - unexpected stop."
+        Pure _ -> error stoppedBeforeEOF
         Free f -> f (Input a)
     done s = case s of
-        Pure _ -> error "Should never happen - unexpected stop."
+        Pure _ -> error stoppedBeforeEOF
         Free f -> case f EOF of
             Pure (a :> ()) -> a
-            Free _ -> error "Should never happen - continue after EOF."
+            Free _ -> error continuedAfterEOF
 
 
 newtype StreamFoldM m a x = 
@@ -104,18 +110,18 @@ evertM (StreamFoldM consumer) = FoldM step begin done
     step (TF.FreeT ms) i = do
         s <- ms
         case s of
-            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Pure _ -> error stoppedBeforeEOF
             TF.Free f -> return (f (Input i))
     done (TF.FreeT ms) = do
         s <- ms
         case s of 
-            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Pure _ -> error stoppedBeforeEOF
             TF.Free f -> do
                 let TF.FreeT ms' = f EOF
                 s' <- ms'
                 case s' of
                     TF.Pure (a :> ()) -> return a
-                    TF.Free _ -> error "Should never happen: continue after EOF."
+                    TF.Free _ -> error continuedAfterEOF
 
 newtype StreamFoldMIO m a x = 
         StreamFoldMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
@@ -130,18 +136,18 @@ evertMIO (StreamFoldMIO consumer) = FoldM step begin done
     step (TF.FreeT ms) i = do
         s <- ms
         case s of
-            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Pure _ -> error stoppedBeforeEOF
             TF.Free f -> return (f (Input i))
     done (TF.FreeT ms) = do
         s <- ms
         case s of 
-            TF.Pure _ -> error "Should never happen - unexpected stop."
+            TF.Pure _ -> error stoppedBeforeEOF
             TF.Free f -> do
                 let TF.FreeT ms' = f EOF
                 s' <- ms'
                 case s' of
                     TF.Pure (a :> ()) -> return a
-                    TF.Free _ -> error "Should never happen: continue after EOF."
+                    TF.Free _ -> error continuedAfterEOF
 
 withFoldMIO :: MonadIO m => FoldM m a x -> StreamFoldM m a x  
 withFoldMIO sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
@@ -150,7 +156,7 @@ newtype StreamTransducer a b =
         StreamTransducer { transduce :: forall m r. Monad m 
                                      => Stream (Of a) m r 
                                      -> Stream (Of b) m r 
-                         }
+                         } 
 
 data Pair a b = Pair !a !b
 
@@ -159,31 +165,31 @@ data StreamState a b = Pristine (Stream (Of b) (Iteratee (Feed a)) ())
 
 transvert :: StreamTransducer b a 
           -> (forall x. Fold a x -> Fold b x)
-transvert (StreamTransducer transvertr) somefold = Fold step begin' done
+transvert (StreamTransducer transducer) somefold = Fold step begin done
     where
-    begin' = Pair somefold (Pristine (transvertr evertedStream))
-    step (Pair innerfold (Pristine pris)) i = step (advance innerfold pris) i
-    step (Pair innerfold (Waiting func)) i = 
-        case func (Input i) of
-            Pure (Left ()) -> error "should never happen 1"
-            Pure (Right (a, nexx)) -> advance (Foldl.fold (duplicate innerfold) [a]) nexx
+    begin = Pair somefold (Pristine (transducer evertedStream))
+    step (Pair innerfold (Pristine pristine)) i = step (advance innerfold pristine) i
+    step (Pair innerfold (Waiting waiting)) i = 
+        case waiting (Input i) of
+            Pure (Left ()) -> error stoppedBeforeEOF
+            Pure (Right (a, stream)) -> advance (Foldl.fold (duplicate innerfold) [a]) stream
             Free f -> Pair innerfold (Waiting f)
-    advance innerfold pris =  
-        case next pris of
-            Pure (Left ()) -> error "should never happen 3"
+    advance innerfold stream =  
+        case next stream of
+            Pure (Left ()) -> error stoppedBeforeEOF
             Pure (Right (a,future)) -> advance (Foldl.fold (duplicate innerfold) [a]) future
             Free f -> Pair innerfold (Waiting f)
-    done (Pair innerfold (Pristine pris)) = done (advance innerfold pris) 
-    done (Pair innerfold (Waiting func)) =
-        case func EOF of
+    done (Pair innerfold (Pristine pristine)) = done (advance innerfold pristine) 
+    done (Pair innerfold (Waiting waiting)) =
+        case waiting EOF of
             Pure (Left ()) -> extract innerfold
-            Pure (Right (a, nexx)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) nexx)
-            Free _ -> error "should never happen 2"
-    advancefinal innerfold pris =  
-        case next pris of
+            Pure (Right (a, stream)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) stream)
+            Free _ -> error continuedAfterEOF
+    advancefinal innerfold stream =  
+        case next stream of
             Pure (Left ()) -> innerfold 
             Pure (Right (a,future)) -> advancefinal (Foldl.fold (duplicate innerfold) [a]) future
-            Free _ -> error "should never happen 4"
+            Free _ -> error continuedAfterEOF
 
 data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
@@ -197,33 +203,33 @@ newtype StreamTransducerM m a b =
 transvertM :: Monad m 
            => StreamTransducerM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
-transvertM (StreamTransducerM transvertr) somefold = FoldM step begin' done
+transvertM (StreamTransducerM transducer) somefold = FoldM step begin done
     where
-    begin' = return (Pair somefold (PristineM (transvertr evertedStreamM)))
-    step (Pair innerfold (PristineM pris)) i = do
-        s <- advance innerfold pris 
+    begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
+    step (Pair innerfold (PristineM pristine)) i = do
+        s <- advance innerfold pristine 
         step s i
-    step (Pair innerfold (WaitingM func)) i = do 
-        s <- TF.runFreeT (func (Input i))
+    step (Pair innerfold (WaitingM waiting)) i = do 
+        s <- TF.runFreeT (waiting (Input i))
         case s of
-            TF.Pure (Left ()) -> error "should never happen 1"
+            TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a, nexx)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advance step1 nexx 
             TF.Free f -> return (Pair innerfold (WaitingM f))
-    advance innerfold pris = do 
-        r <- TF.runFreeT (next pris) 
+    advance innerfold stream = do 
+        r <- TF.runFreeT (next stream) 
         case r of
-            TF.Pure (Left ()) -> error "should never happen 3"
+            TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a,future)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advance step1 future
             TF.Free f -> return (Pair innerfold (WaitingM f))
-    done (Pair innerfold (PristineM pris)) = do
-        s <- advance innerfold pris 
+    done (Pair innerfold (PristineM pristine)) = do
+        s <- advance innerfold pristine 
         done s
-    done (Pair innerfold (WaitingM func)) = do
-        s <- TF.runFreeT (func EOF)
+    done (Pair innerfold (WaitingM waiting)) = do
+        s <- TF.runFreeT (waiting EOF)
         case s of
             TF.Pure (Left ()) -> do
                 Foldl.foldM innerfold []
@@ -231,15 +237,15 @@ transvertM (StreamTransducerM transvertr) somefold = FoldM step begin' done
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 r <- advancefinal step1 future
                 Foldl.foldM r []
-            TF.Free _ -> error "should never happen 4"
-    advancefinal innerfold pris = do
-        r <- TF.runFreeT (next pris) 
+            TF.Free _ -> error continuedAfterEOF
+    advancefinal innerfold stream = do
+        r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Right (a,future)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advancefinal step1 future
             TF.Pure (Left ()) -> return innerfold
-            TF.Free _ -> error "should never happen 4"
+            TF.Free _ -> error continuedAfterEOF
 
 
 newtype StreamTransducerMIO m a b = 
@@ -251,33 +257,33 @@ newtype StreamTransducerMIO m a b =
 transvertMIO :: (MonadIO m) 
              => StreamTransducerMIO m b a 
              -> (forall x . FoldM m a x -> FoldM m b x)
-transvertMIO (StreamTransducerMIO transvertr) somefold = FoldM step begin' done
+transvertMIO (StreamTransducerMIO transducer) somefold = FoldM step begin done
     where
-    begin' = return (Pair somefold (PristineM (transvertr evertedStreamM)))
-    step (Pair innerfold (PristineM pris)) i = do
-        s <- advance innerfold pris 
+    begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
+    step (Pair innerfold (PristineM pristine)) i = do
+        s <- advance innerfold pristine 
         step s i
-    step (Pair innerfold (WaitingM func)) i = do 
-        s <- TF.runFreeT (func (Input i))
+    step (Pair innerfold (WaitingM waiting)) i = do 
+        s <- TF.runFreeT (waiting (Input i))
         case s of
-            TF.Pure (Left ()) -> error "should never happen 1"
+            TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a, nexx)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advance step1 nexx 
             TF.Free f -> return (Pair innerfold (WaitingM f))
-    advance innerfold pris = do 
-        r <- TF.runFreeT (next pris) 
+    advance innerfold stream = do 
+        r <- TF.runFreeT (next stream) 
         case r of
-            TF.Pure (Left ()) -> error "should never happen 3"
+            TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a,future)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advance step1 future
             TF.Free f -> return (Pair innerfold (WaitingM f))
-    done (Pair innerfold (PristineM pris)) = do
-        s <- advance innerfold pris 
+    done (Pair innerfold (PristineM pristine)) = do
+        s <- advance innerfold pristine 
         done s
-    done (Pair innerfold (WaitingM func)) = do
-        s <- TF.runFreeT (func EOF)
+    done (Pair innerfold (WaitingM waiting)) = do
+        s <- TF.runFreeT (waiting EOF)
         case s of
             TF.Pure (Left ()) -> do
                 Foldl.foldM innerfold []
@@ -285,16 +291,15 @@ transvertMIO (StreamTransducerMIO transvertr) somefold = FoldM step begin' done
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 r <- advancefinal step1 future
                 Foldl.foldM r []
-            TF.Free _ -> error "should never happen 4"
-    advancefinal innerfold pris = do
-        r <- TF.runFreeT (next pris) 
+            TF.Free _ -> error continuedAfterEOF
+    advancefinal innerfold stream = do
+        r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Right (a,future)) -> do
                 step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
                 advancefinal step1 future
             TF.Pure (Left ()) -> return innerfold
-            TF.Free _ -> error "should never happen 4"
-
+            TF.Free _ -> error continuedAfterEOF
 
 haltedE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
