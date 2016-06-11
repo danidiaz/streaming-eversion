@@ -3,7 +3,7 @@
 Basically, functions for turning pull-based stream operations defined within
 the "pipes" ecosystem into push-based, iteratee-like stream operations. 
 
-Inspired by the blog post [Programmatic translation to iteratees from pull-based code](http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html)
+Inspired by the blog post [Programmatic translation to iteratees from pull-based code](http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html).
 
 ## Could you go into more detail?
 
@@ -38,6 +38,10 @@ This library provides that.
 
 As already mentioned, when you want to apply a pull-based transformation
 provided by streaming or pipes to a fold from foldl.
+
+## Why so many newtypes?
+
+To avoid having to enable [-XImpredicativeTypes](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#impredicative-polymorphism).
 
 ## Is it fast?
 
