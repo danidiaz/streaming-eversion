@@ -17,6 +17,7 @@ module Streaming.Eversion (
     ,   transvertM
     ,   StreamTransducerMIO(..)
     ,   transvertMIO
+    ,   haltedE
     ) where
 
 import           Data.Functor.Identity
@@ -32,6 +33,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
+import           Control.Monad.Trans.Except
 import           Control.Comonad
 
 -----------------------------------------------------------------------------------------
@@ -292,3 +294,10 @@ transvertMIO (StreamTransducerMIO transvertr) somefold = FoldM step begin' done
                 advancefinal step1 future
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error "should never happen 4"
+
+
+haltedE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+        => t (ExceptT e m) (Either e r)  -- ^
+        -> t (ExceptT e m) r
+haltedE action = action >>= lift . ExceptT . return
+

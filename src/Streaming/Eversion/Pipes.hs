@@ -20,6 +20,8 @@ module Streaming.Eversion.Pipes (
     ,   PipeTransducerMIO(..)
     ,   toStreamTransducerMIO 
     ,   toPipeTransducerMIO
+    ,   pipeLeftoversE
+    ,   pipeHaltedE
     ) where
 
 import           Data.Functor.Identity
@@ -32,6 +34,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
+import           Control.Monad.Trans.Except
 import           Control.Comonad
 
 import           Streaming(Of(..))
@@ -111,9 +114,9 @@ toPipeTransducerM (StreamTransducerM st)=
 
 
 newtype PipeTransducerMIO m a b = 
-        PipeTransducerMIO { transduceMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
-                                         => Producer a (t m) r 
-                                         -> Producer b (t m) r 
+        PipeTransducerMIO { transducePipeMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
+                                             => Producer a (t m) r 
+                                             -> Producer b (t m) r 
                           }
 
 toStreamTransducerMIO :: PipeTransducerMIO m a b -> StreamTransducerMIO m a b
@@ -124,4 +127,18 @@ toPipeTransducerMIO :: StreamTransducerMIO m a b -> PipeTransducerMIO m a b
 toPipeTransducerMIO (StreamTransducerMIO st)= 
     PipeTransducerMIO (\producer -> Pipes.Prelude.unfoldr Streaming.Prelude.next (st (Streaming.Prelude.unfoldr Pipes.next producer)))
 
+    
+pipeLeftoversE :: (MonadTrans t, Monad m, Monad (t (ExceptT leftover m))) 
+               => Producer decoded (t (ExceptT leftover m)) (Producer leftover (t (ExceptT leftover m)) r) -- ^
+               -> Producer decoded (t (ExceptT leftover m)) r
+pipeLeftoversE decodedProducer = decodedProducer >>= \leftoversProducer -> do
+        leftovers <- lift (next leftoversProducer)
+        case leftovers of 
+            Left r -> return r
+            Right (firstleftover,_) -> lift (lift (throwE firstleftover))
+
+pipeHaltedE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+            => Producer a (t (ExceptT e m)) (Either e r)  -- ^
+            -> Producer a (t (ExceptT e m)) r
+pipeHaltedE producer = producer >>= lift . lift . ExceptT . return
 

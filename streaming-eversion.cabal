@@ -9,8 +9,8 @@ Author: Daniel Diaz
 Maintainer: diaz_carrete@yahoo.com
 Bug-Reports: https://github.com/danidiaz/streaming-eversion/issues
 Synopsis: Translating pull-based stream folds to push-based iteratees.
-Description: Functions that take pull-based folds from the "streaming" package 
-             and convert them to push-based folds from the "foldl" package.
+Description: Translations of pull-based folds from the "streaming" package into
+             push-based folds from the "foldl" package.
 Category: Control
 
 Extra-Source-Files:
