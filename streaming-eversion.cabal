@@ -26,14 +26,12 @@ Library
     Build-Depends:
         base          >= 4        && < 5   ,
         transformers  >= 0.4.0.0           ,
-        profunctors   >= 5                 ,
-        foldl         >= 1.1.5             ,
         comonad       >= 4                 ,
+        profunctors   >= 5                 ,
         free          >= 4                 ,         
-        void          >= 0.6               ,
-        streaming     >= 0.1.4.2           ,
+        foldl         >= 1.1.5             ,
         pipes         >= 4.2.0             ,
-        mmorph        >= 1.0.4
+        streaming     >= 0.1.4.2           
     Exposed-Modules:
         Streaming.Eversion
         Streaming.Eversion.Pipes
