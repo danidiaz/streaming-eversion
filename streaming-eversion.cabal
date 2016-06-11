@@ -46,7 +46,8 @@ test-suite doctests
         base          >= 4.4 && < 5        ,
         doctest       >= 0.10.1            ,
         foldl         >= 1.1.5             ,
-        pipes         >= 4.2.0             ,
+        pipes         >= 4.1.9             ,
+        pipes-text    >= 0.0.2.2           ,
         streaming     >= 0.1.4.2           
 
 test-suite tests
