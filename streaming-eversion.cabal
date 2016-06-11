@@ -37,6 +37,18 @@ Library
         Streaming.Eversion.Pipes
     GHC-Options: -O2 -Wall
 
+test-suite doctests
+  type:           exitcode-stdio-1.0
+  ghc-options:    -Wall -threaded
+  hs-source-dirs: tests
+  main-is:        doctests.hs
+  build-depends:
+        base          >= 4.4 && < 5        ,
+        doctest       >= 0.10.1            ,
+        foldl         >= 1.1.5             ,
+        pipes         >= 4.2.0             ,
+        streaming     >= 0.1.4.2           
+
 test-suite tests
   type:           exitcode-stdio-1.0
   ghc-options:    -Wall -threaded

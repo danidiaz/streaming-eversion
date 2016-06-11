@@ -7,7 +7,7 @@ Inspired by the blog post [Programmatic translation to iteratees from pull-based
 
 ## Could you go into more detail?
 
-Sure. There are three related but independent streaming libraries that often go
+There are three related but independent streaming libraries that often go
 together: [pipes](http://hackage.haskell.org/package/pipes), [streaming](http://hackage.haskell.org/package/streaming), and [foldl](http://hackage.haskell.org/package/foldl).
 
 Of these, the first two are pull-based: you take some (possibly effectful)
