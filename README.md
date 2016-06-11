@@ -18,8 +18,8 @@ Meanwhile, foldl is push-based: foldl folds are not directly aware of any
 source, they are like little state machines that keep running as long as
 someone feeds them input. 
 
-Usually, defining transformations on streams is easier and feels more natural
-in pull-based mode. The pipes ecosystem provides a lot of them:
+Usually, defining stream transformations in pull-based mode is easier and feels
+more natural. The pipes ecosystem provides a lot of them:
 [parsers](http://hackage.haskell.org/package/pipes-parse),
 [decoders](http://hackage.haskell.org/package/pipes-text),
 [splitters](http://hackage.haskell.org/package/pipes-group)...
