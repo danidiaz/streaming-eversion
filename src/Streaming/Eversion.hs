@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+-- | Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 module Streaming.Eversion (
+        -- * Stream folds
         StreamFold(..)
     ,   evert
     ,   withFold
@@ -11,24 +12,26 @@ module Streaming.Eversion (
     ,   StreamFoldMIO(..)
     ,   evertMIO
     ,   withFoldMIO
+        -- * Stream transducers
     ,   StreamTransducer(..)
     ,   transvert
     ,   StreamTransducerM(..)
     ,   transvertM
     ,   StreamTransducerMIO(..)
     ,   transvertMIO
+        -- * Utility functions
     ,   haltedE
     ) where
 
-import           Data.Functor.Identity
+import           Data.Bifunctor
+import           Data.Profunctor
 
 import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of(..))
-import           Streaming.Prelude (yield,fold,next)
+import           Streaming.Prelude (yield,next)
 import qualified Streaming.Prelude as S
 
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
@@ -71,6 +74,13 @@ newtype StreamFold a x =
                              -> m (Of x r) 
                    } 
 
+instance Functor (StreamFold a) where
+    fmap f (StreamFold somefold) = StreamFold (fmap (first f) . somefold) 
+
+instance Profunctor StreamFold where
+    lmap f (StreamFold somefold) = StreamFold (somefold . S.map f)
+    rmap = fmap
+
 stoppedBeforeEOF :: String
 stoppedBeforeEOF = "Stopped before receiving EOF."
 
@@ -99,6 +109,13 @@ newtype StreamFoldM m a x =
                                => Stream (Of a) (t m) r 
                                -> t m (Of x r) 
                     }
+
+instance Functor (StreamFoldM m a) where
+    fmap f (StreamFoldM somefold) = StreamFoldM (fmap (first f) . somefold) 
+
+instance Profunctor (StreamFoldM m) where
+    lmap f (StreamFoldM somefold) = StreamFoldM (somefold . S.map f)
+    rmap = fmap
 
 withFoldM :: Monad m => FoldM m a x -> StreamFoldM m a x  
 withFoldM sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
@@ -129,6 +146,13 @@ newtype StreamFoldMIO m a x =
                                    -> t m (Of x r)) 
                       }
 
+instance Functor (StreamFoldMIO m a) where
+    fmap f (StreamFoldMIO somefold) = StreamFoldMIO (fmap (first f) . somefold) 
+
+instance Profunctor (StreamFoldMIO m) where
+    lmap f (StreamFoldMIO somefold) = StreamFoldMIO (somefold . S.map f)
+    rmap = fmap
+
 evertMIO :: MonadIO m => StreamFoldMIO m a x -> FoldM m a x 
 evertMIO (StreamFoldMIO consumer) = FoldM step begin done
     where
@@ -157,6 +181,13 @@ newtype StreamTransducer a b =
                                      => Stream (Of a) m r 
                                      -> Stream (Of b) m r 
                          } 
+
+instance Functor (StreamTransducer a) where
+    fmap f (StreamTransducer transducer) = StreamTransducer (S.map f . transducer) 
+
+instance Profunctor StreamTransducer where
+    lmap f (StreamTransducer somefold) = StreamTransducer (somefold . S.map f)
+    rmap = fmap
 
 data Pair a b = Pair !a !b
 
@@ -199,6 +230,13 @@ newtype StreamTransducerM m a b =
                                        => Stream (Of a) (t m) r 
                                        -> Stream (Of b) (t m) r 
                           }
+
+instance Functor (StreamTransducerM m a) where
+    fmap f (StreamTransducerM transducer) = StreamTransducerM (S.map f . transducer) 
+
+instance Profunctor (StreamTransducerM m) where
+    lmap f (StreamTransducerM somefold) = StreamTransducerM (somefold . S.map f)
+    rmap = fmap
 
 transvertM :: Monad m 
            => StreamTransducerM m b a 
@@ -253,6 +291,13 @@ newtype StreamTransducerMIO m a b =
                                            => Stream (Of a) (t m) r 
                                            -> Stream (Of b) (t m) r 
                             }
+
+instance Functor (StreamTransducerMIO m a) where
+    fmap f (StreamTransducerMIO transducer) = StreamTransducerMIO (S.map f . transducer) 
+
+instance Profunctor (StreamTransducerMIO m) where
+    lmap f (StreamTransducerMIO somefold) = StreamTransducerMIO (somefold . S.map f)
+    rmap = fmap
 
 transvertMIO :: (MonadIO m) 
              => StreamTransducerMIO m b a 

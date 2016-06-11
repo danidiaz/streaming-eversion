@@ -1,7 +1,15 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+-- | This module contains newtype wrappers analogous to those in
+-- 'Streaming.Eversion', but for pipes. 
+--
+-- Also included are conversion functions
+-- that translate between the @streaming@ world and the @pipes@ world.
+--
+-- If you whish to evert a pipe function, first move it to the streaming world.
+
 module Streaming.Eversion.Pipes (
+        -- * Producer folds
         PipeFold(..)
     ,   toStreamFold
     ,   toPipeFold
@@ -11,6 +19,7 @@ module Streaming.Eversion.Pipes (
     ,   PipeFoldMIO(..)
     ,   toStreamFoldMIO
     ,   toPipeFoldMIO
+        -- * Pipe transducers
     ,   PipeTransducer(..)
     ,   toStreamTransducer 
     ,   toPipeTransducer
@@ -20,28 +29,21 @@ module Streaming.Eversion.Pipes (
     ,   PipeTransducerMIO(..)
     ,   toStreamTransducerMIO 
     ,   toPipeTransducerMIO
+        -- * Utility functions
     ,   pipeLeftoversE
     ,   pipeHaltedE
     ) where
 
-import           Data.Functor.Identity
+import           Data.Bifunctor
+import           Data.Profunctor
 
-import           Control.Foldl (Fold(..),FoldM(..))
-import qualified Control.Foldl as Foldl
-
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Free
-import qualified Control.Monad.Trans.Free as TF
 import           Control.Monad.Trans.Except
-import           Control.Comonad
 
 import           Streaming(Of(..))
-import qualified Streaming 
 import qualified Streaming.Prelude
 import           Streaming.Eversion
-import qualified Streaming.Eversion as E
 import           Pipes
 import           Pipes.Prelude
 
@@ -52,6 +54,13 @@ newtype PipeFold a x =
                                => Producer a m r 
                                -> m (x,r) 
                  } 
+
+instance Functor (PipeFold a) where
+    fmap f (PipeFold somefold) = PipeFold (fmap (first f) . somefold) 
+
+instance Profunctor PipeFold where
+    lmap f (PipeFold somefold) = PipeFold (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
 
 toStreamFold :: PipeFold a x -> StreamFold a x
 toStreamFold (PipeFold f) = StreamFold (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
@@ -65,6 +74,13 @@ newtype PipeFoldM m a x =
                                  -> t m (x,r) 
                   }
 
+instance Functor (PipeFoldM m a) where
+    fmap f (PipeFoldM somefold) = PipeFoldM (fmap (first f) . somefold) 
+
+instance Profunctor (PipeFoldM m) where
+    lmap f (PipeFoldM somefold) = PipeFoldM (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
+
 toStreamFoldM :: PipeFoldM m a x -> StreamFoldM m a x
 toStreamFoldM (PipeFoldM f) = StreamFoldM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
@@ -76,6 +92,13 @@ newtype PipeFoldMIO m a x =
                                      => Producer a (t m) r 
                                      -> t m (x,r) 
                     }
+
+instance Functor (PipeFoldMIO m a) where
+    fmap f (PipeFoldMIO somefold) = PipeFoldMIO (fmap (first f) . somefold) 
+
+instance Profunctor (PipeFoldMIO m) where
+    lmap f (PipeFoldMIO somefold) = PipeFoldMIO (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
 
 toStreamFoldMIO :: PipeFoldMIO m a x -> StreamFoldMIO m a x
 toStreamFoldMIO (PipeFoldMIO f) = StreamFoldMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
@@ -89,6 +112,13 @@ newtype PipeTransducer a b =
                                        => Producer a m r 
                                        -> Producer b m r 
                        }
+
+instance Functor (PipeTransducer a) where
+    fmap f (PipeTransducer transducer) = PipeTransducer ((\p -> p >-> Pipes.Prelude.map f) . transducer) 
+
+instance Profunctor PipeTransducer where
+    lmap f (PipeTransducer somefold) = PipeTransducer (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
 
 toStreamTransducer :: PipeTransducer a b -> StreamTransducer a b
 toStreamTransducer (PipeTransducer pt) = 
@@ -104,6 +134,13 @@ newtype PipeTransducerM m a b =
                                          -> Producer b (t m) r 
                         }
 
+instance Functor (PipeTransducerM m a) where
+    fmap f (PipeTransducerM transducer) = PipeTransducerM ((\p -> p >-> Pipes.Prelude.map f) . transducer) 
+
+instance Profunctor (PipeTransducerM m) where
+    lmap f (PipeTransducerM somefold) = PipeTransducerM (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
+
 toStreamTransducerM :: PipeTransducerM m a b -> StreamTransducerM m a b
 toStreamTransducerM (PipeTransducerM pt) = 
     StreamTransducerM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
@@ -118,6 +155,13 @@ newtype PipeTransducerMIO m a b =
                                              => Producer a (t m) r 
                                              -> Producer b (t m) r 
                           }
+
+instance Functor (PipeTransducerMIO m a) where
+    fmap f (PipeTransducerMIO transducer) = PipeTransducerMIO ((\p -> p >-> Pipes.Prelude.map f) . transducer) 
+
+instance Profunctor (PipeTransducerMIO m) where
+    lmap f (PipeTransducerMIO somefold) = PipeTransducerMIO (somefold . (\producer -> producer >-> Pipes.Prelude.map f))
+    rmap = fmap
 
 toStreamTransducerMIO :: PipeTransducerMIO m a b -> StreamTransducerMIO m a b
 toStreamTransducerMIO (PipeTransducerMIO pt) = 
