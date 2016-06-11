@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- | http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 module Streaming.Eversion (
@@ -32,6 +33,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
+import           Control.Monad.Trans.Except
 import           Control.Monad.Morph
 import           Control.Comonad
 
@@ -188,10 +190,23 @@ data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
 
 newtype StreamTransducerM m a b = 
-        StreamTransducerM { transduceM :: forall t r. (MonadTrans t, Monad (t m)) 
+        StreamTransducerM { transduceM :: forall t r. (MonadTrans t, MFunctor t, Monad (t m)) 
                                        => Stream (Of a) (t m) r 
                                        -> Stream (Of b) (t m) r 
                           }
+
+instance MFunctor (TF.FreeT ((->) (Feed b))) where
+   hoist = TF.hoistFreeT 
+
+-- attempt1 :: Monad m => (forall r n. Stream (Of a) n r -> Stream (Of b) (ExceptT e n) r) -> StreamTransducerM (ExceptT e m) a b
+-- attempt1  = undefined
+
+newtype Fallible3 e a b = 
+        Fallible3 { fallible :: forall r y n. (MonadTrans y, MFunctor y, Monad n,Monad (y n)) => Stream (Of a) (y n) r -> Stream (Of b) (y (ExceptT e n)) r }
+
+attempt3 :: Monad m => Fallible3 e a b -> StreamTransducerM (ExceptT e m) a b
+attempt3 (Fallible3 t) = StreamTransducerM (\stream -> do hoist (hoist squash) (t stream))
+     
 
 transvertM :: Monad m 
            => StreamTransducerM m b a 
@@ -242,7 +257,7 @@ transvertM (StreamTransducerM transvertr) somefold = FoldM step begin' done
 
 
 newtype StreamTransducerMIO m a b = 
-        StreamTransducerMIO { transduceMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
+        StreamTransducerMIO { transduceMIO :: forall t r. (MonadTrans t, MFunctor t, MonadIO (t m)) 
                                            => Stream (Of a) (t m) r 
                                            -> Stream (Of b) (t m) r 
                             }
