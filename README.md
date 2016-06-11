@@ -27,10 +27,10 @@ folds have very useful Applicative and Comonad instances.
 
 Also, sometimes, a library will only offer a push-based interface. 
 
-Wouldn't it be nice if you could apply already existing pull-based operations
-to push-based consumers? For example, a function that maps (covariantly) over
-the values produced by a stream could become a function that maps
-(contravariantly) over the inputs received by a fold. 
+Wouldn't it be nice if you could adapt already existing pull-based operations
+to work on push-based consumers? For example, a function that maps
+(covariantly) over the values produced by a stream could become a function that
+maps (contravariantly) over the inputs received by a fold. 
 
 This library provides that.
 
