@@ -1,8 +1,15 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | Some of the type signatures in this module look scary, but actually many
--- (suitably polymorphic) operations on 'Stream's will unify with them.
+-- | The pull-based-to-push-based transformations work on functions that are 
+-- polymorphic over a monad transformer.  
 -- 
+-- Because of this, some of the type signatures in this
+-- module look scary, but actually many (suitably polymorphic) operations on
+-- 'Stream's will unify with them.
+-- 
+-- To get "interruptible" operations that can exit early with an error, put a
+-- 'ExceptT' transformer just below the polymorphic monad transformer. 
+--
 -- Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 
 module Streaming.Eversion (
