@@ -32,6 +32,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
+import           Control.Monad.Morph
 import           Control.Comonad
 
 -----------------------------------------------------------------------------------------

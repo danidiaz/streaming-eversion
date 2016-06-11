@@ -32,7 +32,8 @@ Library
         free          >= 4                 ,         
         void          >= 0.6               ,
         streaming     >= 0.1.4.2           ,
-        pipes         >= 4.2.0 
+        pipes         >= 4.2.0             ,
+        mmorph        >= 1.0.4
     Exposed-Modules:
         Streaming.Eversion
         Streaming.Eversion.Pipes
