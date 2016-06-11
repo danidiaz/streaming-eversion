@@ -1,6 +1,10 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+-- | Some of the type signatures in this module look scary, but actually many
+-- (suitably polymorphic) operations on 'Stream's will unify with them.
+-- 
+-- Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
+
 module Streaming.Eversion (
         -- * Stream folds
         StreamFold(..)
