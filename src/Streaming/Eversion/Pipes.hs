@@ -6,7 +6,7 @@
 -- Also included are conversion functions
 -- that translate between the @streaming@ world and the @pipes@ world.
 --
--- If you whish to evert a pipe function, first move it to the streaming world.
+-- If you whish to evert a pipe function, first move it to the @streaming@ world.
 
 module Streaming.Eversion.Pipes (
         -- * Producer folds
