@@ -15,6 +15,7 @@ module Streaming.Eversion.Pipes (
     ,   pipeTransversion
     ,   transvert
     ,   pipeTransversionM
+    ,   pipeDecoderTransversionM
     ,   transvertM
     ,   pipeTransversionMIO
     ,   transvertMIO
@@ -55,6 +56,10 @@ pipeTransversion pt = transversion (\stream -> Streaming.Prelude.unfoldr Pipes.n
 pipeTransversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
                   -> TransversionM m a b
 pipeTransversionM pt = transversionM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
+pipeDecoderTransversionM :: Monad m => (forall t r .(MonadTrans t, Monad (t (ExceptT bytes m))) => (Producer bytes (t (ExceptT bytes m)) r -> Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r))) -- ^
+                         -> TransversionM (ExceptT bytes m) bytes text
+pipeDecoderTransversionM decoder = pipeTransversionM (pipeLeftoverE . decoder)
 
 pipeTransversionMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
                   -> TransversionMIO m a b
