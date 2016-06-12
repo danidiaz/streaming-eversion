@@ -30,8 +30,8 @@ module Streaming.Eversion.Pipes (
     ,   toStreamTransducerMIO 
     ,   toPipeTransducerMIO
         -- * Utility functions
-    ,   pipeLeftoversE
-    ,   pipeHaltedE
+    ,   pipeLeftoverE
+    ,   pipeHaltE
     ) where
 
 import           Data.Bifunctor
@@ -172,17 +172,17 @@ toPipeTransducerMIO (StreamTransducerMIO st)=
     PipeTransducerMIO (\producer -> Pipes.Prelude.unfoldr Streaming.Prelude.next (st (Streaming.Prelude.unfoldr Pipes.next producer)))
 
     
-pipeLeftoversE :: (MonadTrans t, Monad m, Monad (t (ExceptT leftover m))) 
-               => Producer decoded (t (ExceptT leftover m)) (Producer leftover (t (ExceptT leftover m)) r) -- ^
-               -> Producer decoded (t (ExceptT leftover m)) r
-pipeLeftoversE decodedProducer = decodedProducer >>= \leftoversProducer -> do
+pipeLeftoverE :: (MonadTrans t, Monad m, Monad (t (ExceptT leftover m))) 
+              => Producer decoded (t (ExceptT leftover m)) (Producer leftover (t (ExceptT leftover m)) r) -- ^
+              -> Producer decoded (t (ExceptT leftover m)) r
+pipeLeftoverE decodedProducer = decodedProducer >>= \leftoversProducer -> do
         leftovers <- lift (next leftoversProducer)
         case leftovers of 
             Left r -> return r
             Right (firstleftover,_) -> lift (lift (throwE firstleftover))
 
-pipeHaltedE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-            => Producer a (t (ExceptT e m)) (Either e r)  -- ^
-            -> Producer a (t (ExceptT e m)) r
-pipeHaltedE producer = producer >>= lift . lift . ExceptT . return
+pipeHaltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+          => Producer a (t (ExceptT e m)) (Either e r)  -- ^
+          -> Producer a (t (ExceptT e m)) r
+pipeHaltE producer = producer >>= lift . lift . ExceptT . return
 

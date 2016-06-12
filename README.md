@@ -1,6 +1,6 @@
 ## What's in this library?
 
-Basically, functions for turning pull-based stream operations defined within
+Functions for turning pull-based stream operations defined within
 the "pipes" ecosystem into push-based, iteratee-like stream operations. 
 
 Inspired by the blog post [Programmatic translation to iteratees from pull-based code](http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html).
@@ -19,7 +19,7 @@ source, they are like little state machines that keep running as long as
 someone feeds them input. 
 
 Usually, defining stream transformations in pull-based mode is easier and feels
-more natural. The pipes ecosystem provides a lot of them:
+more natural. The pipes ecosystem already provides a lot of those:
 [parsers](http://hackage.haskell.org/package/pipes-parse),
 [decoders](http://hackage.haskell.org/package/pipes-text),
 [splitters](http://hackage.haskell.org/package/pipes-group)...

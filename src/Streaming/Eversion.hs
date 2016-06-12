@@ -33,7 +33,7 @@ module Streaming.Eversion (
     ,   StreamTransducerMIO(..)
     ,   transvertMIO
         -- * Utility functions
-    ,   haltedE
+    ,   haltE
     ) where
 
 import           Data.Bifunctor
@@ -53,8 +53,11 @@ import           Control.Monad.Trans.Except
 import           Control.Comonad
 
 {- $setup
->>  import           Control.Foldl (Fold(..),FoldM(..))
->>  import qualified Control.Foldl as L
+>>> import           Data.Functor.Identity
+>>> import           Control.Monad.Trans.Except
+>>> import           Control.Monad.Trans.Identity
+>>> import           Control.Foldl (Fold(..),FoldM(..))
+>>> import qualified Control.Foldl as L
 >>> import           Streaming (Stream,Of(..))
 >>> import           Streaming.Prelude (yield,next)
 >>> import qualified Streaming.Prelude as S
@@ -367,8 +370,13 @@ transvertMIO (StreamTransducerMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
-haltedE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+-- | Helper function for constructing jjjjjjjjjjjjjj
+-- 
+-- >>> runExcept $ runIdentityT $ consumeM (StreamFoldM (\_ -> haltE (return (Left ())))) (S.each [1..10])
+-- >>> Left ()
+-- 
+haltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
         -> t (ExceptT e m) r
-haltedE action = action >>= lift . ExceptT . return
+haltE action = action >>= lift . ExceptT . return
 
