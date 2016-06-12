@@ -16,21 +16,24 @@
 
 module Streaming.Eversion (
         -- * Stream folds
-        StreamFold(..)
+        Eversion
+    ,   eversion
     ,   evert
-    ,   withFold
-    ,   StreamFoldM(..)
+    ,   EversionM
+    ,   eversionM
     ,   evertM
-    ,   withFoldM
-    ,   StreamFoldMIO(..)
+    ,   EversionMIO
+    ,   eversionMIO
     ,   evertMIO
-    ,   withFoldMIO
         -- * Stream transducers
-    ,   StreamTransducer(..)
+    ,   Transversion
+    ,   transversion
     ,   transvert
-    ,   StreamTransducerM(..)
+    ,   TransversionM
+    ,   transversionM
     ,   transvertM
-    ,   StreamTransducerMIO(..)
+    ,   TransversionMIO
+    ,   transversionMIO
     ,   transvertMIO
         -- * Utility functions
     ,   haltE
@@ -92,17 +95,17 @@ evertedStreamM = do
 
 -----------------------------------------------------------------------------------------
 
-newtype StreamFold a x = 
-        StreamFold { consume :: forall m r. Monad m 
+newtype Eversion a x = 
+        Eversion { consume :: forall m r. Monad m 
                              => Stream (Of a) m r 
                              -> m (Of x r) 
                    } 
 
-instance Functor (StreamFold a) where
-    fmap f (StreamFold somefold) = StreamFold (fmap (first f) . somefold) 
+instance Functor (Eversion a) where
+    fmap f (Eversion somefold) = Eversion (fmap (first f) . somefold) 
 
-instance Profunctor StreamFold where
-    lmap f (StreamFold somefold) = StreamFold (somefold . S.map f)
+instance Profunctor Eversion where
+    lmap f (Eversion somefold) = Eversion (somefold . S.map f)
     rmap = fmap
 
 stoppedBeforeEOF :: String
@@ -111,11 +114,11 @@ stoppedBeforeEOF = "Stopped before receiving EOF."
 continuedAfterEOF :: String
 continuedAfterEOF = "Continued after receiving EOF."
 
-withFold :: Fold a x -> StreamFold a x  
-withFold sf = StreamFold (Foldl.purely S.fold sf) 
+eversion :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Eversion a x
+eversion = Eversion
 
-evert :: StreamFold a x -> Fold a x
-evert (StreamFold consumer) = Fold step begin done
+evert :: Eversion a x -> Fold a x
+evert (Eversion consumer) = Fold step begin done
     where
     begin = consumer evertedStream
     step s a = case s of
@@ -128,24 +131,25 @@ evert (StreamFold consumer) = Fold step begin done
             Free _ -> error continuedAfterEOF
 
 
-newtype StreamFoldM m a x = 
-        StreamFoldM { consumeM :: forall t r. (MonadTrans t, Monad (t m)) 
+newtype EversionM m a x = 
+        EversionM { consumeM :: forall t r. (MonadTrans t, Monad (t m)) 
                                => Stream (Of a) (t m) r 
                                -> t m (Of x r) 
                     }
 
-instance Functor (StreamFoldM m a) where
-    fmap f (StreamFoldM somefold) = StreamFoldM (fmap (first f) . somefold) 
+instance Functor (EversionM m a) where
+    fmap f (EversionM somefold) = EversionM (fmap (first f) . somefold) 
 
-instance Profunctor (StreamFoldM m) where
-    lmap f (StreamFoldM somefold) = StreamFoldM (somefold . S.map f)
+instance Profunctor (EversionM m) where
+    lmap f (EversionM somefold) = EversionM (somefold . S.map f)
     rmap = fmap
 
-withFoldM :: Monad m => FoldM m a x -> StreamFoldM m a x  
-withFoldM sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
+eversionM ::(forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
+            -> EversionM m a x
+eversionM = EversionM                                                      
 
-evertM :: Monad m => StreamFoldM m a x -> FoldM m a x
-evertM (StreamFoldM consumer) = FoldM step begin done
+evertM :: Monad m => EversionM m a x -> FoldM m a x
+evertM (EversionM consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -164,21 +168,25 @@ evertM (StreamFoldM consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
-newtype StreamFoldMIO m a x = 
-        StreamFoldMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
+newtype EversionMIO m a x = 
+        EversionMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
                                    => Stream (Of a) (t m) r 
                                    -> t m (Of x r)) 
                       }
 
-instance Functor (StreamFoldMIO m a) where
-    fmap f (StreamFoldMIO somefold) = StreamFoldMIO (fmap (first f) . somefold) 
+instance Functor (EversionMIO m a) where
+    fmap f (EversionMIO somefold) = EversionMIO (fmap (first f) . somefold) 
 
-instance Profunctor (StreamFoldMIO m) where
-    lmap f (StreamFoldMIO somefold) = StreamFoldMIO (somefold . S.map f)
+instance Profunctor (EversionMIO m) where
+    lmap f (EversionMIO somefold) = EversionMIO (somefold . S.map f)
     rmap = fmap
 
-evertMIO :: MonadIO m => StreamFoldMIO m a x -> FoldM m a x 
-evertMIO (StreamFoldMIO consumer) = FoldM step begin done
+eversionMIO ::(forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
+            -> EversionMIO m a x
+eversionMIO = EversionMIO                                                      
+
+evertMIO :: MonadIO m => EversionMIO m a x -> FoldM m a x 
+evertMIO (EversionMIO consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -197,20 +205,17 @@ evertMIO (StreamFoldMIO consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
-withFoldMIO :: MonadIO m => FoldM m a x -> StreamFoldM m a x  
-withFoldMIO sfm = StreamFoldM (Foldl.impurely S.foldM (Foldl.hoists lift sfm))
-
-newtype StreamTransducer a b = 
-        StreamTransducer { transduce :: forall m r. Monad m 
+newtype Transversion a b = 
+        Transversion { transduce :: forall m r. Monad m 
                                      => Stream (Of a) m r 
                                      -> Stream (Of b) m r 
                          } 
 
-instance Functor (StreamTransducer a) where
-    fmap f (StreamTransducer transducer) = StreamTransducer (S.map f . transducer) 
+instance Functor (Transversion a) where
+    fmap f (Transversion transducer) = Transversion (S.map f . transducer) 
 
-instance Profunctor StreamTransducer where
-    lmap f (StreamTransducer somefold) = StreamTransducer (somefold . S.map f)
+instance Profunctor Transversion where
+    lmap f (Transversion somefold) = Transversion (somefold . S.map f)
     rmap = fmap
 
 data Pair a b = Pair !a !b
@@ -218,9 +223,14 @@ data Pair a b = Pair !a !b
 data StreamState a b = Pristine (Stream (Of b) (Iteratee (Feed a)) ())
                      | Waiting  (Feed a -> Iteratee (Feed a) (Either () (b, Stream (Of b) (Iteratee (Feed a)) ())))
 
-transvert :: StreamTransducer b a 
+
+transversion :: (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r) -- ^
+                 -> Transversion a b
+transversion = Transversion
+
+transvert :: Transversion b a 
           -> (forall x. Fold a x -> Fold b x)
-transvert (StreamTransducer transducer) somefold = Fold step begin done
+transvert (Transversion transducer) somefold = Fold step begin done
     where
     begin = Pair somefold (Pristine (transducer evertedStream))
     step (Pair innerfold (Pristine pristine)) i = step (advance innerfold pristine) i
@@ -249,23 +259,27 @@ transvert (StreamTransducer transducer) somefold = Fold step begin done
 data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
 
-newtype StreamTransducerM m a b = 
-        StreamTransducerM { transduceM :: forall t r. (MonadTrans t, Monad (t m)) 
+newtype TransversionM m a b = 
+        TransversionM { transduceM :: forall t r. (MonadTrans t, Monad (t m)) 
                                        => Stream (Of a) (t m) r 
                                        -> Stream (Of b) (t m) r 
                           }
 
-instance Functor (StreamTransducerM m a) where
-    fmap f (StreamTransducerM transducer) = StreamTransducerM (S.map f . transducer) 
+transversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+                  -> TransversionM m a b 
+transversionM = TransversionM
 
-instance Profunctor (StreamTransducerM m) where
-    lmap f (StreamTransducerM somefold) = StreamTransducerM (somefold . S.map f)
+instance Functor (TransversionM m a) where
+    fmap f (TransversionM transducer) = TransversionM (S.map f . transducer) 
+
+instance Profunctor (TransversionM m) where
+    lmap f (TransversionM somefold) = TransversionM (somefold . S.map f)
     rmap = fmap
 
 transvertM :: Monad m 
-           => StreamTransducerM m b a 
+           => TransversionM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
-transvertM (StreamTransducerM transducer) somefold = FoldM step begin done
+transvertM (TransversionM transducer) somefold = FoldM step begin done
     where
     begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
     step (Pair innerfold (PristineM pristine)) i = do
@@ -310,23 +324,28 @@ transvertM (StreamTransducerM transducer) somefold = FoldM step begin done
             TF.Free _ -> error continuedAfterEOF
 
 
-newtype StreamTransducerMIO m a b = 
-        StreamTransducerMIO { transduceMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
+newtype TransversionMIO m a b = 
+        TransversionMIO { transduceMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
                                            => Stream (Of a) (t m) r 
                                            -> Stream (Of b) (t m) r 
                             }
 
-instance Functor (StreamTransducerMIO m a) where
-    fmap f (StreamTransducerMIO transducer) = StreamTransducerMIO (S.map f . transducer) 
+instance Functor (TransversionMIO m a) where
+    fmap f (TransversionMIO transducer) = TransversionMIO (S.map f . transducer) 
 
-instance Profunctor (StreamTransducerMIO m) where
-    lmap f (StreamTransducerMIO somefold) = StreamTransducerMIO (somefold . S.map f)
+instance Profunctor (TransversionMIO m) where
+    lmap f (TransversionMIO somefold) = TransversionMIO (somefold . S.map f)
     rmap = fmap
 
+transversionMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+                  -> TransversionMIO m a b 
+transversionMIO = TransversionMIO
+
 transvertMIO :: (MonadIO m) 
-             => StreamTransducerMIO m b a 
+             => TransversionMIO m b a 
              -> (forall x . FoldM m a x -> FoldM m b x)
-transvertMIO (StreamTransducerMIO transducer) somefold = FoldM step begin done
+
+transvertMIO (TransversionMIO transducer) somefold = FoldM step begin done
     where
     begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
     step (Pair innerfold (PristineM pristine)) i = do
@@ -372,7 +391,7 @@ transvertMIO (StreamTransducerMIO transducer) somefold = FoldM step begin done
 
 -- | Helper function for constructing jjjjjjjjjjjjjj
 -- 
--- >>> runExcept $ runIdentityT $ consumeM (StreamFoldM (\_ -> haltE (return (Left ())))) (S.each [1..10])
+-- >>> runExcept $ runIdentityT $ consumeM (EversionM (\_ -> haltE (return (Left ())))) (S.each [1..10])
 -- >>> Left ()
 -- 
 haltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 

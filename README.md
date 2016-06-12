@@ -1,6 +1,6 @@
 ## What's in this library?
 
-Functions for turning pull-based stream operations defined within
+Functions that turn pull-based stream operations defined within
 the "pipes" ecosystem into push-based, iteratee-like stream operations. 
 
 Inspired by the blog post [Programmatic translation to iteratees from pull-based code](http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html).
@@ -49,17 +49,4 @@ To avoid having to enable [-XImpredicativeTypes](https://downloads.haskell.org/~
 ## Is it fast?
 
 I haven't benchmarked or optimized it. It is likely to be slow.
-
-## What about [foldl-transduce](http://hackage.haskell.org/package/foldl-transduce)?
-
-I wrote that package to be able to define stateful transformations on the
-inputs of foldl folds. But those transformations must be defined in a push-like
-fashion.
-
-## What about [pipes-transduce](http://hackage.haskell.org/package/pipes-transduce)?
-
-That package was an outgrowth of
-[process-streaming](http://hackage.haskell.org/package/pipes-transduce). It can
-be used elsewhere but it mainly serves the needs of process-streaming. Among
-other things, it provides a way consuming two pipes producers concurrently.
 
