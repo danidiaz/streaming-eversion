@@ -1,27 +1,26 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | 
+-- | Like "Streaming.Eversion", but for Producer folds and transformations.
 -- 
 
 module Streaming.Eversion.Pipes (
-        -- * Pipe eversions
-        pipeEversion
+        -- * Evertible Producer folds
+        pipeEvertible
     ,   evert
-    ,   pipeEversionM
+    ,   pipeEvertibleM
     ,   evertM
-    ,   pipeEversionMIO
+    ,   pipeEvertibleMIO
     ,   evertMIO
-        -- * Pipe transversions
-    ,   pipeTransversion
+        -- * Transvertible Producer transformations
+    ,   pipeTransvertible
     ,   transvert
-    ,   pipeTransversionM
+    ,   pipeTransvertibleM
     ,   transvertM
---    ,   pipeDecoderTransversionE
-    ,   pipeTransversionMIO
+    ,   pipeTransvertibleMIO
     ,   transvertMIO
         -- * Auxiliary functions
-    ,   pipeLeftoverE
-    ,   pipeHaltE
+    ,   pipeLeftoversE
+    ,   pipeTransE
     ) where
 
 import           Control.Monad.IO.Class
@@ -34,62 +33,91 @@ import           Streaming.Eversion
 import           Pipes
 import           Pipes.Prelude
 
+{- $setup
+>>> :set -XOverloadedStrings
+>>> import           Data.Functor.Identity
+>>> import           Control.Monad.Trans.Except
+>>> import           Control.Monad.Trans.Identity
+>>> import           Control.Foldl (Fold(..),FoldM(..))
+>>> import qualified Control.Foldl as L
+>>> import           Streaming (Stream,Of(..))
+>>> import           Streaming.Prelude (yield,next)
+>>> import qualified Streaming.Prelude as S
+>>> import           Pipes
+>>> import qualified Pipes.Prelude as P
+>>> import qualified Pipes.Text as T
+>>> import qualified Pipes.Text.Encoding as TE
+-}
+
 -----------------------------------------------------------------------------------------
 
 
-pipeEversion :: (forall m r. Monad m => Producer a m r -> m (x,r)) -- ^
-             -> Eversion a x
-pipeEversion f = eversion (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEvertible :: (forall m r. Monad m => Producer a m r -> m (x,r)) -- ^
+             -> Evertible a x
+pipeEvertible f = evertible (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeEversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
-              -> EversionM m a x
-pipeEversionM f = eversionM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
+              -> EvertibleM m a x
+pipeEvertibleM f = evertibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeEversionMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
-                -> EversionMIO m a x
-pipeEversionMIO f = eversionMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
+                -> EvertibleMIO m a x
+pipeEvertibleMIO f = evertibleMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeTransversion :: (forall m r. Monad m => Producer a m r -> Producer b m r) -- ^
-                 -> Transversion a b
-pipeTransversion pt = transversion (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeTransvertible :: (forall m r. Monad m => Producer a m r -> Producer b m r) -- ^
+                 -> Transvertible a b
+pipeTransvertible pt = transvertible (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeTransversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
-                  -> TransversionM m a b
-pipeTransversionM pt = transversionM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeTransvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
+                  -> TransvertibleM m a b
+pipeTransvertibleM pt = transvertibleM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 -- -- | Ignore the somewhat baroque type and just remember that you can plug any of the "non-lens decoding functions" from "Pipes.Text.Encoding" here.
 -- --
--- -- The result is a 'TransversionM' that works in 'ExceptT'. If any undecodable bytes are found, the computation halts with the undecodable bytes as the error.
--- pipeDecoderTransversionE :: Monad m => (forall t r .(MonadTrans t, Monad (t (ExceptT bytes m))) => (Producer bytes (t (ExceptT bytes m)) r -> Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r))) -- ^
---                          -> TransversionM (ExceptT bytes m) bytes text
--- pipeDecoderTransversionE decoder = pipeTransversionM (pipeLeftoverE . decoder)
+-- -- The result is a 'TransvertibleM' that works in 'ExceptT'. If any undecodable bytes are found, the computation halts with the undecodable bytes as the error.
+-- pipeDecoderTransvertibleE :: Monad m => (forall t r .(MonadTrans t, Monad (t (ExceptT bytes m))) => (Producer bytes (t (ExceptT bytes m)) r -> Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r))) -- ^
+--                          -> TransvertibleM (ExceptT bytes m) bytes text
+-- pipeDecoderTransvertibleE decoder = pipeTransvertibleM (pipeLeftoversE . decoder)
 
-pipeTransversionMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
-                  -> TransversionMIO m a b
-pipeTransversionMIO pt = transversionMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeTransvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
+                  -> TransvertibleMIO m a b
+pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-{-| Allows you to plug any of the "non-lens decoding functions" from "Pipes.Text.Encoding" into 'pipeTransversionM'. Just 
-    precompose the decoder with this function before passing it to 'pipeTransversionM'.
+{-| Allows you to plug any of the "non-lens decoding functions" from "Pipes.Text.Encoding" into 'pipeTransvertibleM'. Just 
+    compose the decoder with this function before passing it to 'pipeTransvertibleM'.
 
-    The result will be a 'TransversionM' that works in 'ExceptT'. 
+    The result will be a 'TransvertibleM' that works in 'ExceptT'. 
+
+>>> :{ 
+    let adapted = transvertM (pipeTransvertibleM (pipeLeftoversE . TE.decodeUtf8)) (L.generalize L.mconcat) 
+    in  runExceptT $ L.foldM adapted ["decode","this"]
+    :}
+Right "decodethis"
 
     If any undecodable bytes are found, the computation halts with the undecoded bytes as the error.
+
+>>> :{ 
+    let adapted = transvertM (pipeTransvertibleM (pipeLeftoversE . TE.decodeUtf8)) (L.generalize L.mconcat) 
+    in  runExceptT $ L.foldM adapted ["invalid \xc3\x28","sequence"]
+    :}
+Left "\195("
+
 -}
-pipeLeftoverE :: (MonadTrans t, Monad m, Monad (t (ExceptT leftover m))) => Producer decoded (t (ExceptT leftover m)) (Producer leftover (t (ExceptT leftover m)) r) -- ^
-              -> Producer decoded (t (ExceptT leftover m)) r
-pipeLeftoverE decodedProducer = decodedProducer >>= \leftoversProducer -> do
+pipeLeftoversE :: (MonadTrans t, Monad m, Monad (t (ExceptT bytes m))) => Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r) -- ^
+              -> Producer text (t (ExceptT bytes m)) r
+pipeLeftoversE decodedProducer = decodedProducer >>= \leftoversProducer -> do
         leftovers <- lift (next leftoversProducer)
         case leftovers of 
             Left r -> return r
             Right (firstleftover,_) -> lift (lift (throwE firstleftover))
 
 {-| If your producer-transforming computation can fail early returning a 'Left',
-    compose it with this function before passing it to 'transversionM'. 
+    compose it with this function before passing it to 'transvertibleM'. 
 
-    The result will be an 'TransversionM' that works on 'ExceptT'.
+    The result will be an 'TransvertibleM' that works on 'ExceptT'.
 -}
-pipeHaltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-          => Producer a (t (ExceptT e m)) (Either e r)  -- ^
-          -> Producer a (t (ExceptT e m)) r
-pipeHaltE producer = producer >>= lift . lift . ExceptT . return
+pipeTransE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+           => Producer a (t (ExceptT e m)) (Either e r)  -- ^
+           -> Producer a (t (ExceptT e m)) r
+pipeTransE producer = producer >>= lift . lift . ExceptT . return
 

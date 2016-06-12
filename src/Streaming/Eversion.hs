@@ -1,42 +1,42 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-{-| The pull-based-to-push-based transformations work on functions that are 
+{-| The pull-to-push transformations in this module require functions that are 
     polymorphic over a monad transformer.  
     
-    Because of this, some of the type signatures in this
-    module look scary, but actually many (suitably polymorphic) operations on
-    'Stream's will unify with them.
+    Because of this, some of the type signatures look scary, but actually many
+    (suitably polymorphic) operations on 'Stream's will unify with them.
    
     To get "interruptible" operations that can exit early with an error, put a
-    'ExceptT' transformer just below the polymorphic monad transformer. 
+    'ExceptT' transformer just below the polymorphic monad transformer. See
+    'foldE'.
    
     Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 -}
 
 module Streaming.Eversion (
-        -- * Stream folds
-        Eversion
-    ,   eversion
+        -- * Evertible Stream folds
+        Evertible
+    ,   evertible
     ,   evert
-    ,   EversionM
-    ,   eversionM
+    ,   EvertibleM
+    ,   evertibleM
     ,   evertM
-    ,   EversionMIO
-    ,   eversionMIO
+    ,   EvertibleMIO
+    ,   evertibleMIO
     ,   evertMIO
-        -- * Stream transducers
-    ,   Transversion
-    ,   transversion
+        -- * Transvertible Stream transformations
+    ,   Transvertible
+    ,   transvertible
     ,   transvert
-    ,   TransversionM
-    ,   transversionM
+    ,   TransvertibleM
+    ,   transvertibleM
     ,   transvertM
-    ,   TransversionMIO
-    ,   transversionMIO
+    ,   TransvertibleMIO
+    ,   transvertibleMIO
     ,   transvertMIO
-        -- * Utility functions
-    ,   haltE
+        -- * Auxiliary functions
+    ,   foldE
     ) where
 
 import           Data.Bifunctor
@@ -95,14 +95,15 @@ evertedStreamM = do
 
 -----------------------------------------------------------------------------------------
 
-newtype Eversion a x = 
-        Eversion (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
+-- | A stream-consuming function that can be turned into a pure, push-based fold. 
+newtype Evertible a x = 
+        Evertible (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
 
-instance Functor (Eversion a) where
-    fmap f (Eversion somefold) = Eversion (fmap (first f) . somefold) 
+instance Functor (Evertible a) where
+    fmap f (Evertible somefold) = Evertible (fmap (first f) . somefold) 
 
-instance Profunctor Eversion where
-    lmap f (Eversion somefold) = Eversion (somefold . S.map f)
+instance Profunctor Evertible where
+    lmap f (Evertible somefold) = Evertible (somefold . S.map f)
     rmap = fmap
 
 stoppedBeforeEOF :: String
@@ -111,11 +112,11 @@ stoppedBeforeEOF = "Stopped before receiving EOF."
 continuedAfterEOF :: String
 continuedAfterEOF = "Continued after receiving EOF."
 
-eversion :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Eversion a x
-eversion = Eversion
+evertible :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Evertible a x
+evertible = Evertible
 
-evert :: Eversion a x -> Fold a x
-evert (Eversion consumer) = Fold step begin done
+evert :: Evertible a x -> Fold a x
+evert (Evertible consumer) = Fold step begin done
     where
     begin = consumer evertedStream
     step s a = case s of
@@ -128,22 +129,26 @@ evert (Eversion consumer) = Fold step begin done
             Free _ -> error continuedAfterEOF
 
 
-newtype EversionM m a x = 
-        EversionM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+-- | Like 'Evertible', but gives the stream-consuming function access to a base monad.
+--   
+--   Note however that control operations can't be lifted through the transformer.
+--
+newtype EvertibleM m a x = 
+        EvertibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
-instance Functor (EversionM m a) where
-    fmap f (EversionM somefold) = EversionM (fmap (first f) . somefold) 
+instance Functor (EvertibleM m a) where
+    fmap f (EvertibleM somefold) = EvertibleM (fmap (first f) . somefold) 
 
-instance Profunctor (EversionM m) where
-    lmap f (EversionM somefold) = EversionM (somefold . S.map f)
+instance Profunctor (EvertibleM m) where
+    lmap f (EvertibleM somefold) = EvertibleM (somefold . S.map f)
     rmap = fmap
 
-eversionM ::(forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
-            -> EversionM m a x
-eversionM = EversionM                                                      
+evertibleM ::(forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
+            -> EvertibleM m a x
+evertibleM = EvertibleM                                                      
 
-evertM :: Monad m => EversionM m a x -> FoldM m a x
-evertM (EversionM consumer) = FoldM step begin done
+evertM :: Monad m => EvertibleM m a x -> FoldM m a x
+evertM (EvertibleM consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -162,22 +167,24 @@ evertM (EversionM consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
-newtype EversionMIO m a x = 
-        EversionMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+-- | Like 'EvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
+--   
+newtype EvertibleMIO m a x = 
+        EvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
-instance Functor (EversionMIO m a) where
-    fmap f (EversionMIO somefold) = EversionMIO (fmap (first f) . somefold) 
+instance Functor (EvertibleMIO m a) where
+    fmap f (EvertibleMIO somefold) = EvertibleMIO (fmap (first f) . somefold) 
 
-instance Profunctor (EversionMIO m) where
-    lmap f (EversionMIO somefold) = EversionMIO (somefold . S.map f)
+instance Profunctor (EvertibleMIO m) where
+    lmap f (EvertibleMIO somefold) = EvertibleMIO (somefold . S.map f)
     rmap = fmap
 
-eversionMIO ::(forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
-            -> EversionMIO m a x
-eversionMIO = EversionMIO                                                      
+evertibleMIO ::(forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
+            -> EvertibleMIO m a x
+evertibleMIO = EvertibleMIO                                                      
 
-evertMIO :: MonadIO m => EversionMIO m a x -> FoldM m a x 
-evertMIO (EversionMIO consumer) = FoldM step begin done
+evertMIO :: MonadIO m => EvertibleMIO m a x -> FoldM m a x 
+evertMIO (EvertibleMIO consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -196,14 +203,15 @@ evertMIO (EversionMIO consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
-newtype Transversion a b = 
-        Transversion (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r)
+-- | A stream-transforming function that can be turned into fold-transforming function.
+newtype Transvertible a b = 
+        Transvertible (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r)
 
-instance Functor (Transversion a) where
-    fmap f (Transversion transducer) = Transversion (S.map f . transducer) 
+instance Functor (Transvertible a) where
+    fmap f (Transvertible transducer) = Transvertible (S.map f . transducer) 
 
-instance Profunctor Transversion where
-    lmap f (Transversion somefold) = Transversion (somefold . S.map f)
+instance Profunctor Transvertible where
+    lmap f (Transvertible somefold) = Transvertible (somefold . S.map f)
     rmap = fmap
 
 data Pair a b = Pair !a !b
@@ -212,13 +220,13 @@ data StreamState a b = Pristine (Stream (Of b) (Iteratee (Feed a)) ())
                      | Waiting  (Feed a -> Iteratee (Feed a) (Either () (b, Stream (Of b) (Iteratee (Feed a)) ())))
 
 
-transversion :: (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r) -- ^
-                 -> Transversion a b
-transversion = Transversion
+transvertible :: (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r) -- ^
+                 -> Transvertible a b
+transvertible = Transvertible
 
-transvert :: Transversion b a 
+transvert :: Transvertible b a 
           -> (forall x. Fold a x -> Fold b x)
-transvert (Transversion transducer) somefold = Fold step begin done
+transvert (Transvertible transducer) somefold = Fold step begin done
     where
     begin = Pair somefold (Pristine (transducer evertedStream))
     step (Pair innerfold (Pristine pristine)) i = step (advance innerfold pristine) i
@@ -247,24 +255,28 @@ transvert (Transversion transducer) somefold = Fold step begin done
 data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
 
-newtype TransversionM m a b = 
-        TransversionM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+-- | Like 'Transvertible', but gives the stream-transforming function access to a base monad.
+--   
+--   Note however that control operations can't be lifted through the transformer.
+--
+newtype TransvertibleM m a b = 
+        TransvertibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
 
-transversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-                  -> TransversionM m a b 
-transversionM = TransversionM
+transvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r) -- ^
+                  -> TransvertibleM m a b 
+transvertibleM = TransvertibleM
 
-instance Functor (TransversionM m a) where
-    fmap f (TransversionM transducer) = TransversionM (S.map f . transducer) 
+instance Functor (TransvertibleM m a) where
+    fmap f (TransvertibleM transducer) = TransvertibleM (S.map f . transducer) 
 
-instance Profunctor (TransversionM m) where
-    lmap f (TransversionM somefold) = TransversionM (somefold . S.map f)
+instance Profunctor (TransvertibleM m) where
+    lmap f (TransvertibleM somefold) = TransvertibleM (somefold . S.map f)
     rmap = fmap
 
 transvertM :: Monad m 
-           => TransversionM m b a 
+           => TransvertibleM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
-transvertM (TransversionM transducer) somefold = FoldM step begin done
+transvertM (TransvertibleM transducer) somefold = FoldM step begin done
     where
     begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
     step (Pair innerfold (PristineM pristine)) i = do
@@ -309,25 +321,27 @@ transvertM (TransversionM transducer) somefold = FoldM step begin done
             TF.Free _ -> error continuedAfterEOF
 
 
-newtype TransversionMIO m a b = 
-        TransversionMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+-- | Like 'TransvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
+--   
+newtype TransvertibleMIO m a b = 
+        TransvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
 
-instance Functor (TransversionMIO m a) where
-    fmap f (TransversionMIO transducer) = TransversionMIO (S.map f . transducer) 
+instance Functor (TransvertibleMIO m a) where
+    fmap f (TransvertibleMIO transducer) = TransvertibleMIO (S.map f . transducer) 
 
-instance Profunctor (TransversionMIO m) where
-    lmap f (TransversionMIO somefold) = TransversionMIO (somefold . S.map f)
+instance Profunctor (TransvertibleMIO m) where
+    lmap f (TransvertibleMIO somefold) = TransvertibleMIO (somefold . S.map f)
     rmap = fmap
 
-transversionMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-                  -> TransversionMIO m a b 
-transversionMIO = TransversionMIO
+transvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r) -- ^
+                  -> TransvertibleMIO m a b 
+transvertibleMIO = TransvertibleMIO
 
 transvertMIO :: (MonadIO m) 
-             => TransversionMIO m b a 
+             => TransvertibleMIO m b a 
              -> (forall x . FoldM m a x -> FoldM m b x)
 
-transvertMIO (TransversionMIO transducer) somefold = FoldM step begin done
+transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
     where
     begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
     step (Pair innerfold (PristineM pristine)) i = do
@@ -371,17 +385,17 @@ transvertMIO (TransversionMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
-{-| If your stream-consuming computation can fail early returning a 'Left',
-    compose it with this function before passing it to 'eversionM'. 
+{-| If your stream-folding computation can fail early returning a 'Left',
+    compose it with this function before passing it to 'evertibleM'. 
 
-    The result will be an 'EversionM' that works on 'ExceptT'.
+    The result will be an 'EvertibleM' that works on 'ExceptT'.
 
->>> runExceptT $ L.foldM (evertM (eversionM (haltE . (\_ -> return (Left ()))))) [1..10]
+>>> runExceptT $ L.foldM (evertM (evertibleM (foldE . (\_ -> return (Left ()))))) [1..10]
 Left ()
 
 -} 
-haltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+foldE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
         -> t (ExceptT e m) r
-haltE action = action >>= lift . ExceptT . return
+foldE action = action >>= lift . ExceptT . return
 
