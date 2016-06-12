@@ -129,10 +129,16 @@ evert (Evertible consumer) = Fold step begin done
             Free _ -> error continuedAfterEOF
 
 
--- | Like 'Evertible', but gives the stream-consuming function access to a base monad.
---   
---   Note however that control operations can't be lifted through the transformer.
---
+{- | Like 'Evertible', but gives the stream-consuming function access to a base monad.
+   
+>>> :{
+    let f stream = fmap ((:>) ()) (lift (putStrLn "x") >> S.effects stream)
+    in  L.foldM (evertM (evertibleM f)) ["a","b","c"]
+    :}
+x
+
+    Note however that control operations can't be lifted through the transformer.
+-}
 newtype EvertibleM m a x = 
         EvertibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
@@ -167,8 +173,14 @@ evertM (EvertibleM consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
--- | Like 'EvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
---   
+{-| Like 'EvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
+ 
+>>> L.foldM (evertMIO (evertibleMIO (\stream -> fmap ((:>) ()) (S.print stream)))) ["a","b","c"]
+"a"
+"b"
+"c"
+
+-}
 newtype EvertibleMIO m a x = 
         EvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 

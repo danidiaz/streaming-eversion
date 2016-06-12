@@ -1,20 +1,20 @@
 ## What's in this library?
 
-Functions that turn pull-based stream operations defined within
-the pipes/streaming ecosystem into push-based, iteratee-like stream operations. 
+Functions that turn pull-based stream operations from the pipes/streaming
+ecosystem into push-based, iteratee-like stream operations. 
 
 Inspired by the blog post [Programmatic translation to iteratees from pull-based code](http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html).
 
 ## Could you go into more detail?
 
-There are three streaming libraries that, often go together:
+There are three streaming libraries that often go together:
 [pipes](http://hackage.haskell.org/package/pipes),
 [streaming](http://hackage.haskell.org/package/streaming), and
 [foldl](http://hackage.haskell.org/package/foldl).
 
 Of these, the first two are pull-based: you take some (possibly effectful)
 source of values and keep extracting stuff until the source is exhausted and/or
-you have extracted all the info you need.
+you have obtained all the info you need.
 
 Meanwhile, foldl is push-based: foldl folds are not directly aware of any
 source, they are like little state machines that keep running as long as
