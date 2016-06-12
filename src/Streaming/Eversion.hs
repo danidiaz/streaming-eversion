@@ -389,10 +389,11 @@ transvertMIO (TransversionMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
--- | Helper function for constructing jjjjjjjjjjjjjj
+-- | If your stream-consuming computation can fail returning an 'Either',
+-- compose it with this function before passing it to 'eversionM'.
 -- 
--- >>> runExcept $ runIdentityT $ consumeM (EversionM (\_ -> haltE (return (Left ())))) (S.each [1..10])
--- >>> Left ()
+-- >>> runIdentity . runExceptT $ L.foldM (evertM (eversionM (haltE . (\_ -> haltE (return (Left ())))))) [1..10]
+-- Left ()
 -- 
 haltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
