@@ -96,10 +96,7 @@ evertedStreamM = do
 -----------------------------------------------------------------------------------------
 
 newtype Eversion a x = 
-        Eversion { consume :: forall m r. Monad m 
-                             => Stream (Of a) m r 
-                             -> m (Of x r) 
-                   } 
+        Eversion (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
 
 instance Functor (Eversion a) where
     fmap f (Eversion somefold) = Eversion (fmap (first f) . somefold) 
@@ -132,10 +129,7 @@ evert (Eversion consumer) = Fold step begin done
 
 
 newtype EversionM m a x = 
-        EversionM { consumeM :: forall t r. (MonadTrans t, Monad (t m)) 
-                               => Stream (Of a) (t m) r 
-                               -> t m (Of x r) 
-                    }
+        EversionM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
 instance Functor (EversionM m a) where
     fmap f (EversionM somefold) = EversionM (fmap (first f) . somefold) 
@@ -169,10 +163,7 @@ evertM (EversionM consumer) = FoldM step begin done
                     TF.Free _ -> error continuedAfterEOF
 
 newtype EversionMIO m a x = 
-        EversionMIO { consumeMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) 
-                                   => Stream (Of a) (t m) r 
-                                   -> t m (Of x r)) 
-                      }
+        EversionMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
 instance Functor (EversionMIO m a) where
     fmap f (EversionMIO somefold) = EversionMIO (fmap (first f) . somefold) 
@@ -206,10 +197,7 @@ evertMIO (EversionMIO consumer) = FoldM step begin done
                     TF.Free _ -> error continuedAfterEOF
 
 newtype Transversion a b = 
-        Transversion { transduce :: forall m r. Monad m 
-                                     => Stream (Of a) m r 
-                                     -> Stream (Of b) m r 
-                         } 
+        Transversion (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r)
 
 instance Functor (Transversion a) where
     fmap f (Transversion transducer) = Transversion (S.map f . transducer) 
@@ -260,10 +248,7 @@ data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
 
 newtype TransversionM m a b = 
-        TransversionM { transduceM :: forall t r. (MonadTrans t, Monad (t m)) 
-                                       => Stream (Of a) (t m) r 
-                                       -> Stream (Of b) (t m) r 
-                          }
+        TransversionM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
 
 transversionM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
                   -> TransversionM m a b 
@@ -325,10 +310,7 @@ transvertM (TransversionM transducer) somefold = FoldM step begin done
 
 
 newtype TransversionMIO m a b = 
-        TransversionMIO { transduceMIO :: forall t r. (MonadTrans t, MonadIO (t m)) 
-                                           => Stream (Of a) (t m) r 
-                                           -> Stream (Of b) (t m) r 
-                            }
+        TransversionMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
 
 instance Functor (TransversionMIO m a) where
     fmap f (TransversionMIO transducer) = TransversionMIO (S.map f . transducer) 
@@ -389,12 +371,15 @@ transvertMIO (TransversionMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
--- | If your stream-consuming computation can fail returning an 'Either',
--- compose it with this function before passing it to 'eversionM'.
--- 
--- >>> runIdentity . runExceptT $ L.foldM (evertM (eversionM (haltE . (\_ -> haltE (return (Left ())))))) [1..10]
--- Left ()
--- 
+{-| If your stream-consuming computation can fail early returning a 'Left',
+    compose it with this function before passing it to 'eversionM'. 
+
+    The result will be an 'EversionM' that works on 'ExceptT'.
+
+>>> runExceptT $ L.foldM (evertM (eversionM (haltE . (\_ -> return (Left ()))))) [1..10]
+Left ()
+
+-} 
 haltE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
         -> t (ExceptT e m) r
