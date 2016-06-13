@@ -4,14 +4,16 @@
 -- 
 
 module Streaming.Eversion.Pipes (
-        -- * Eversible Producer folds
+        -- * Producer folds turn into iteratees
         pipeEversible
     ,   evert
     ,   pipeEversibleM
+    ,   pipeEversibleM_
     ,   evertM
     ,   pipeEversibleMIO
+    ,   pipeEversibleMIO_
     ,   evertMIO
-        -- * Transvertible Producer transformations
+        -- * Producer transformations turn into transducers
     ,   pipeTransvertible
     ,   transvert
     ,   pipeTransvertibleM
@@ -60,9 +62,17 @@ pipeEversibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r
               -> EversibleM m a x
 pipeEversibleM f = eversibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
+pipeEversibleM_ :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) -- ^
+              -> EversibleM m a ()
+pipeEversibleM_ f = eversibleM (\stream -> fmap (\r -> () :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
 pipeEversibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
                 -> EversibleMIO m a x
 pipeEversibleMIO f = eversibleMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
+pipeEversibleMIO_ :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m r) -- ^
+                -> EversibleMIO m a ()
+pipeEversibleMIO_ f = eversibleMIO (\stream -> fmap (\r -> () :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 pipeTransvertible :: (forall m r. Monad m => Producer a m r -> Producer b m r) -- ^
                  -> Transvertible a b
