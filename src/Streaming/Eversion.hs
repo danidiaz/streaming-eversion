@@ -95,7 +95,7 @@ evertedStreamM = do
 
 -----------------------------------------------------------------------------------------
 
--- | A stream-consuming function that can be turned into a pure, push-based fold. 
+-- | A stream-folding function that can be turned into a pure, push-based fold. 
 newtype Evertible a x = 
         Evertible (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
 
@@ -129,7 +129,7 @@ evert (Evertible consumer) = Fold step begin done
             Free _ -> error continuedAfterEOF
 
 
-{- | Like 'Evertible', but gives the stream-consuming function access to a base monad.
+{- | Like 'Evertible', but gives the stream-folding function access to a base monad.
    
 >>> :{
     let f stream = fmap ((:>) ()) (lift (putStrLn "x") >> S.effects stream)
@@ -333,7 +333,7 @@ transvertM (TransvertibleM transducer) somefold = FoldM step begin done
             TF.Free _ -> error continuedAfterEOF
 
 
--- | Like 'TransvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
+-- | Like 'TransvertibleM', but gives the stream-transforming function the ability to use 'liftIO'.
 --   
 newtype TransvertibleMIO m a b = 
         TransvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)

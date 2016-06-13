@@ -30,7 +30,7 @@ However, push-based mode also has advantages. Push-based abstractions are not
 tied to a particular type of source because data is fed externally. And foldl
 folds have very useful Applicative and Comonad instances. 
 
-Also, sometimes, a library will only offer a push-based interface. 
+Also, sometimes a library will only offer a push-based interface. 
 
 Wouldn't it be nice if you could adapt already existing pull-based operations
 to work on push-based consumers? For example, using a decoding function from
