@@ -38,6 +38,8 @@ import           Pipes.Prelude
 {- $setup
 >>> :set -XOverloadedStrings
 >>> import           Data.Functor.Identity
+>>> import           Data.Bifunctor
+>>> import           Data.Bitraversable
 >>> import           Control.Monad.Trans.Except
 >>> import           Control.Monad.Trans.Identity
 >>> import           Control.Foldl (Fold(..),FoldM(..))
@@ -49,6 +51,7 @@ import           Pipes.Prelude
 >>> import qualified Pipes.Prelude as P
 >>> import qualified Pipes.Text as T
 >>> import qualified Pipes.Text.Encoding as TE
+>>> import           Lens.Micro.Extras
 -}
 
 -----------------------------------------------------------------------------------------
@@ -99,18 +102,29 @@ pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr
     The result will be a 'TransvertibleM' that works in 'ExceptT'. 
 
 >>> :{ 
-    let adapted = transvertM (pipeTransvertibleM (pipeLeftoversE . TE.decodeUtf8)) (L.generalize L.mconcat) 
-    in  runExceptT $ L.foldM adapted ["decode","this"]
+    let adapt = transvertM (pipeTransvertibleM (fails2 (first (\_ -> ())) . TE.decode (TE.utf8 . TE.eof)))
+    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["decode","this"]
     :}
 Right "decodethis"
 
     If any undecodable bytes are found, the computation halts with the undecoded bytes as the error.
 
 >>> :{ 
-    let adapted = transvertM (pipeTransvertibleM (pipeLeftoversE . TE.decodeUtf8)) (L.generalize L.mconcat) 
-    in  runExceptT $ L.foldM adapted ["invalid \xc3\x28","sequence"]
+    let adapt = transvertM (pipeTransvertibleM (fails2 (first (\_ -> ())) . TE.decode (TE.utf8 . TE.eof)))
+    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
     :}
-Left "\195("
+Left ()
+
+>>> :{ 
+    let adapt = transvertM (pipeTransvertibleM (fails2M (bitraverse probe return) . TE.decode (TE.utf8 . TE.eof)))
+        probe producer = do
+            r <- Pipes.next producer
+            case r of
+                Left _ -> return mempty
+                Right (bytes,_) -> return bytes
+    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
+    :}
+Left ()
 
 -}
 pipeLeftoversE :: (MonadTrans t, Monad m, Monad (t (ExceptT bytes m))) => Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r) -- ^

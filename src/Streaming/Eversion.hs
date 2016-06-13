@@ -39,6 +39,10 @@ module Streaming.Eversion (
     ,   transvertMIO
         -- * Auxiliary functions
     ,   foldE
+    ,   fails1
+    ,   fails2
+    ,   fails1M
+    ,   fails2M
     ) where
 
 import           Data.Bifunctor
@@ -422,3 +426,26 @@ foldE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m)))
         -> t (ExceptT e m) r
 foldE action = action >>= lift . ExceptT . return
 
+fails1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+       => (x -> Either e r) -- ^
+       -> t (ExceptT e m) x  -- ^
+       -> t (ExceptT e m) r
+fails1 mapper action = action >>= lift . ExceptT . return . mapper
+
+fails2 :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (s (t (ExceptT e m)))) 
+       => (x -> Either e r) -- ^
+       -> s (t (ExceptT e m)) x  -- ^
+       -> s (t (ExceptT e m)) r
+fails2 mapper action = action >>= lift . lift . ExceptT . return . mapper
+
+fails1M :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+        => (x -> m (Either e r)) -- ^
+        -> t (ExceptT e m) x  -- ^
+        -> t (ExceptT e m) r
+fails1M mapperM action = action >>= lift . ExceptT . mapperM
+
+fails2M :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (s (t (ExceptT e m)))) 
+        => (x -> m (Either e r)) -- ^
+        -> s (t (ExceptT e m)) x  -- ^
+        -> s (t (ExceptT e m)) r
+fails2M mapperM action = action >>= lift . lift . ExceptT . mapperM
