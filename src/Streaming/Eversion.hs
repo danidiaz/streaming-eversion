@@ -439,13 +439,15 @@ fails2 :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (
 fails2 mapper action = action >>= lift . lift . ExceptT . return . mapper
 
 fails1M :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-        => (x -> m (Either e r)) -- ^
+        => (x -> (t (ExceptT e m) (Either e r))) -- ^
         -> t (ExceptT e m) x  -- ^
         -> t (ExceptT e m) r
-fails1M mapperM action = action >>= lift . ExceptT . mapperM
+fails1M mapperM action = action >>= mapperM >>= lift . ExceptT . return
 
 fails2M :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (s (t (ExceptT e m)))) 
-        => (x -> m (Either e r)) -- ^
+        => (x -> (t (ExceptT e m) (Either e r))) -- ^
         -> s (t (ExceptT e m)) x  -- ^
         -> s (t (ExceptT e m)) r
-fails2M mapperM action = action >>= lift . lift . ExceptT . mapperM
+fails2M mapperM action = action >>= lift . mapperM >>= lift . lift . ExceptT . return
+
+-- throwE1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) => (e -> e -> t ExceptT e m a

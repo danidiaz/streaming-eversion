@@ -124,7 +124,7 @@ Left ()
                 Right (bytes,_) -> return bytes
     in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
     :}
-Left ()
+Left "\195("
 
 -}
 pipeLeftoversE :: (MonadTrans t, Monad m, Monad (t (ExceptT bytes m))) => Producer text (t (ExceptT bytes m)) (Producer bytes (t (ExceptT bytes m)) r) -- ^
