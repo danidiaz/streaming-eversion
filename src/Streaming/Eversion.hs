@@ -15,14 +15,14 @@
 -}
 
 module Streaming.Eversion (
-        -- * Evertible Stream folds
-        Evertible
+        -- * Eversible Stream folds
+        Eversible
     ,   evertible
     ,   evert
-    ,   EvertibleM
+    ,   EversibleM
     ,   evertibleM
     ,   evertM
-    ,   EvertibleMIO
+    ,   EversibleMIO
     ,   evertibleMIO
     ,   evertMIO
         -- * Transvertible Stream transformations
@@ -96,14 +96,14 @@ evertedStreamM = do
 -----------------------------------------------------------------------------------------
 
 -- | A stream-folding function that can be turned into a pure, push-based fold. 
-newtype Evertible a x = 
-        Evertible (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
+newtype Eversible a x = 
+        Eversible (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
 
-instance Functor (Evertible a) where
-    fmap f (Evertible somefold) = Evertible (fmap (first f) . somefold) 
+instance Functor (Eversible a) where
+    fmap f (Eversible somefold) = Eversible (fmap (first f) . somefold) 
 
-instance Profunctor Evertible where
-    lmap f (Evertible somefold) = Evertible (somefold . S.map f)
+instance Profunctor Eversible where
+    lmap f (Eversible somefold) = Eversible (somefold . S.map f)
     rmap = fmap
 
 stoppedBeforeEOF :: String
@@ -112,11 +112,11 @@ stoppedBeforeEOF = "Stopped before receiving EOF."
 continuedAfterEOF :: String
 continuedAfterEOF = "Continued after receiving EOF."
 
-evertible :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Evertible a x
-evertible = Evertible
+evertible :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Eversible a x
+evertible = Eversible
 
-evert :: Evertible a x -> Fold a x
-evert (Evertible consumer) = Fold step begin done
+evert :: Eversible a x -> Fold a x
+evert (Eversible consumer) = Fold step begin done
     where
     begin = consumer evertedStream
     step s a = case s of
@@ -129,7 +129,7 @@ evert (Evertible consumer) = Fold step begin done
             Free _ -> error continuedAfterEOF
 
 
-{- | Like 'Evertible', but gives the stream-folding function access to a base monad.
+{- | Like 'Eversible', but gives the stream-folding function access to a base monad.
    
 >>> :{
     let f stream = fmap ((:>) ()) (lift (putStrLn "x") >> S.effects stream)
@@ -139,22 +139,22 @@ x
 
     Note however that control operations can't be lifted through the transformer.
 -}
-newtype EvertibleM m a x = 
-        EvertibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+newtype EversibleM m a x = 
+        EversibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
-instance Functor (EvertibleM m a) where
-    fmap f (EvertibleM somefold) = EvertibleM (fmap (first f) . somefold) 
+instance Functor (EversibleM m a) where
+    fmap f (EversibleM somefold) = EversibleM (fmap (first f) . somefold) 
 
-instance Profunctor (EvertibleM m) where
-    lmap f (EvertibleM somefold) = EvertibleM (somefold . S.map f)
+instance Profunctor (EversibleM m) where
+    lmap f (EversibleM somefold) = EversibleM (somefold . S.map f)
     rmap = fmap
 
 evertibleM ::(forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
-            -> EvertibleM m a x
-evertibleM = EvertibleM                                                      
+            -> EversibleM m a x
+evertibleM = EversibleM                                                      
 
-evertM :: Monad m => EvertibleM m a x -> FoldM m a x
-evertM (EvertibleM consumer) = FoldM step begin done
+evertM :: Monad m => EversibleM m a x -> FoldM m a x
+evertM (EversibleM consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -173,7 +173,7 @@ evertM (EvertibleM consumer) = FoldM step begin done
                     TF.Pure (a :> ()) -> return a
                     TF.Free _ -> error continuedAfterEOF
 
-{-| Like 'EvertibleM', but gives the stream-consuming function the ability to use 'liftIO'.
+{-| Like 'EversibleM', but gives the stream-consuming function the ability to use 'liftIO'.
  
 >>> L.foldM (evertMIO (evertibleMIO (\stream -> fmap ((:>) ()) (S.print stream)))) ["a","b","c"]
 "a"
@@ -181,22 +181,22 @@ evertM (EvertibleM consumer) = FoldM step begin done
 "c"
 
 -}
-newtype EvertibleMIO m a x = 
-        EvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+newtype EversibleMIO m a x = 
+        EversibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
 
-instance Functor (EvertibleMIO m a) where
-    fmap f (EvertibleMIO somefold) = EvertibleMIO (fmap (first f) . somefold) 
+instance Functor (EversibleMIO m a) where
+    fmap f (EversibleMIO somefold) = EversibleMIO (fmap (first f) . somefold) 
 
-instance Profunctor (EvertibleMIO m) where
-    lmap f (EvertibleMIO somefold) = EvertibleMIO (somefold . S.map f)
+instance Profunctor (EversibleMIO m) where
+    lmap f (EversibleMIO somefold) = EversibleMIO (somefold . S.map f)
     rmap = fmap
 
 evertibleMIO ::(forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
-            -> EvertibleMIO m a x
-evertibleMIO = EvertibleMIO                                                      
+            -> EversibleMIO m a x
+evertibleMIO = EversibleMIO                                                      
 
-evertMIO :: MonadIO m => EvertibleMIO m a x -> FoldM m a x 
-evertMIO (EvertibleMIO consumer) = FoldM step begin done
+evertMIO :: MonadIO m => EversibleMIO m a x -> FoldM m a x 
+evertMIO (EversibleMIO consumer) = FoldM step begin done
     where
     begin = return (consumer evertedStreamM)
     step (TF.FreeT ms) i = do
@@ -400,7 +400,7 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
 {-| If your stream-folding computation can fail early returning a 'Left',
     compose it with this function before passing it to 'evertibleM'. 
 
-    The result will be an 'EvertibleM' that works on 'ExceptT'.
+    The result will be an 'EversibleM' that works on 'ExceptT'.
 
 >>> runExceptT $ L.foldM (evertM (evertibleM (foldE . (\_ -> return (Left ()))))) [1..10]
 Left ()

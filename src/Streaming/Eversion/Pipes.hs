@@ -4,12 +4,12 @@
 -- 
 
 module Streaming.Eversion.Pipes (
-        -- * Evertible Producer folds
-        pipeEvertible
+        -- * Eversible Producer folds
+        pipeEversible
     ,   evert
-    ,   pipeEvertibleM
+    ,   pipeEversibleM
     ,   evertM
-    ,   pipeEvertibleMIO
+    ,   pipeEversibleMIO
     ,   evertMIO
         -- * Transvertible Producer transformations
     ,   pipeTransvertible
@@ -52,17 +52,17 @@ import           Pipes.Prelude
 -----------------------------------------------------------------------------------------
 
 
-pipeEvertible :: (forall m r. Monad m => Producer a m r -> m (x,r)) -- ^
-             -> Evertible a x
-pipeEvertible f = evertible (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEversible :: (forall m r. Monad m => Producer a m r -> m (x,r)) -- ^
+             -> Eversible a x
+pipeEversible f = evertible (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeEvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
-              -> EvertibleM m a x
-pipeEvertibleM f = evertibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEversibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
+              -> EversibleM m a x
+pipeEversibleM f = evertibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-pipeEvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
-                -> EvertibleMIO m a x
-pipeEvertibleMIO f = evertibleMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+pipeEversibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
+                -> EversibleMIO m a x
+pipeEversibleMIO f = evertibleMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 pipeTransvertible :: (forall m r. Monad m => Producer a m r -> Producer b m r) -- ^
                  -> Transvertible a b
