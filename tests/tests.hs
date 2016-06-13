@@ -22,27 +22,27 @@ tests = testGroup "tests"
             testCaseEq
             "empty"
             ([]::[Integer])
-            (Foldl.fold (evert (evertible S.toList)) [])
+            (Foldl.fold (evert (eversible S.toList)) [])
         ,   testCaseEq
             "toList"
             [1..10::Integer]
-            (Foldl.fold (evert (evertible S.toList)) [1..10])
+            (Foldl.fold (evert (eversible S.toList)) [1..10])
         ]
     ,   testGroup "evertM"
         [
             testCaseEq
             "empty"
             ([]::[Integer])
-            (runIdentity (Foldl.foldM (evertM (evertibleM S.toList)) []))
+            (runIdentity (Foldl.foldM (evertM (eversibleM S.toList)) []))
         ,   testCaseEq
             "toList"
             [1..10::Integer]
-            (runIdentity (Foldl.foldM (evertM (evertibleM S.toList)) [1..10]))
+            (runIdentity (Foldl.foldM (evertM (eversibleM S.toList)) [1..10]))
         ,   testCaseEqIO
             "ref"
             (True,[1..10::Integer])
             (do ref <- newIORef False 
-                res <- Foldl.foldM (evertM (evertibleM (\s -> S.toList s <* lift (writeIORef ref True)))) [1..10]
+                res <- Foldl.foldM (evertM (eversibleM (\s -> S.toList s <* lift (writeIORef ref True)))) [1..10]
                 refval <- readIORef ref
                 return (refval,res))
         ]
@@ -51,16 +51,16 @@ tests = testGroup "tests"
             testCaseEqIO
             "empty"
             ([]::[Integer])
-            (Foldl.foldM (evertMIO (evertibleMIO S.toList)) [])
+            (Foldl.foldM (evertMIO (eversibleMIO S.toList)) [])
         ,   testCaseEqIO
             "toList"
             [1..10::Integer]
-            (Foldl.foldM (evertMIO (evertibleMIO S.toList)) [1..10])
+            (Foldl.foldM (evertMIO (eversibleMIO S.toList)) [1..10])
         ,   testCaseEqIO
             "ref"
             (True,[1..10::Integer])
             (do ref <- newIORef False 
-                res <- Foldl.foldM (evertMIO (evertibleMIO (\s -> S.toList s <* liftIO (writeIORef ref True)))) [1..10]
+                res <- Foldl.foldM (evertMIO (eversibleMIO (\s -> S.toList s <* liftIO (writeIORef ref True)))) [1..10]
                 refval <- readIORef ref
                 return (refval,res))
         ]
