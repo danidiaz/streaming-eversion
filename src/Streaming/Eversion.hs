@@ -15,7 +15,7 @@
 -}
 
 module Streaming.Eversion (
-        -- * Stream folds turn into iteratees
+        -- * Stream folds 
         Eversible
     ,   eversible
     ,   evert
@@ -27,22 +27,19 @@ module Streaming.Eversion (
     ,   eversibleMIO
     ,   eversibleMIO_
     ,   evertMIO
-        -- * Stream transformations turn into transducers
+        -- * Stream transformations 
     ,   Transvertible
     ,   transvertible
     ,   transvert
     ,   TransvertibleM
     ,   transvertibleM
+    ,   runTransvertibleM
     ,   transvertM
     ,   TransvertibleMIO
     ,   transvertibleMIO
+    ,   runTransvertibleMIO
     ,   transvertMIO
-        -- * Auxiliary functions
-    ,   foldE
-    ,   fails1
-    ,   fails2
-    ,   fails1M
-    ,   fails2M
+        -- * Throwing errors
     ,   throwE2
     ,   throwE3
     ,   hoistEither2
@@ -54,12 +51,13 @@ import           Data.Profunctor
 
 import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
-import           Streaming (Stream,Of(..))
+import           Streaming (Stream,Of(..),hoist,distribute)
 import           Streaming.Prelude (yield,next)
 import qualified Streaming.Prelude as S
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Identity
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
 import           Control.Monad.Trans.Except
@@ -297,6 +295,12 @@ transvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m
                   -> TransvertibleM m a b 
 transvertibleM = TransvertibleM
 
+-- | Recover the stored function, discarding the transformer.
+--   
+runTransvertibleM :: TransvertibleM m a b -- ^
+                  -> (forall r. Monad  m => Stream (Of a) m r -> Stream (Of b)  m r) 
+runTransvertibleM  (TransvertibleM t) = \stream -> runIdentityT (distribute (t (hoist lift stream)))
+
 instance Functor (TransvertibleM m a) where
     fmap f (TransvertibleM transducer) = TransvertibleM (S.map f . transducer) 
 
@@ -368,8 +372,12 @@ transvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) 
                   -> TransvertibleMIO m a b 
 transvertibleMIO = TransvertibleMIO
 
+runTransvertibleMIO :: TransvertibleMIO m a b -- ^
+                    -> (forall r. MonadIO m => Stream (Of a) m r -> Stream (Of b)  m r) 
+runTransvertibleMIO  (TransvertibleMIO t) = \stream -> runIdentityT (distribute (t (hoist lift stream)))
+
 transvertMIO :: (MonadIO m) 
-             => TransvertibleMIO m b a 
+             => TransvertibleMIO m b a -- ^
              -> (forall x . FoldM m a x -> FoldM m b x)
 
 transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
@@ -441,33 +449,3 @@ hoistEither3 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m
              => Either e a -> (stream (t (ExceptT e m))) a -- ^ 
 hoistEither3 = lift . lift . ExceptT . return
 
-foldE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-        => t (ExceptT e m) (Either e r)  -- ^
-        -> t (ExceptT e m) r
-foldE action = action >>= lift . ExceptT . return
-
-fails1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-       => (x -> Either e r) -- ^
-       -> t (ExceptT e m) x  -- ^
-       -> t (ExceptT e m) r
-fails1 mapper action = action >>= lift . ExceptT . return . mapper
-
-fails2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (stream (t (ExceptT e m)))) 
-       => (x -> Either e r) -- ^
-       -> stream (t (ExceptT e m)) x  -- ^
-       -> stream (t (ExceptT e m)) r
-fails2 mapper action = action >>= lift . lift . ExceptT . return . mapper
-
-fails1M :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-        => (x -> (t (ExceptT e m) (Either e r))) -- ^
-        -> t (ExceptT e m) x  -- ^
-        -> t (ExceptT e m) r
-fails1M mapperM action = action >>= mapperM >>= lift . ExceptT . return
-
-fails2M :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (stream (t (ExceptT e m)))) 
-        => (x -> (t (ExceptT e m) (Either e r))) -- ^
-        -> stream (t (ExceptT e m)) x  -- ^
-        -> stream (t (ExceptT e m)) r
-fails2M mapperM action = action >>= lift . mapperM >>= lift . lift . ExceptT . return
-
--- throwE1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) => (e -> e -> t ExceptT e m a
