@@ -43,6 +43,10 @@ module Streaming.Eversion (
     ,   fails2
     ,   fails1M
     ,   fails2M
+    ,   throwE2
+    ,   throwE3
+    ,   hoistEither2
+    ,   hoistEither3
     ) where
 
 import           Data.Bifunctor
@@ -417,10 +421,26 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
 
     The result will be an 'EversibleM' that works on 'ExceptT'.
 
->>> runExceptT $ L.foldM (evertM (eversibleM (foldE . (\_ -> return (Left ()))))) [1..10]
+>>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE2 ()))) [1..10]
 Left ()
 
 -} 
+throwE2 :: (MonadTrans t, Monad m) 
+        => e -> t (ExceptT e m) a -- ^
+throwE2 = lift . throwE
+
+throwE3 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+        => e -> stream (t (ExceptT e m)) a -- ^
+throwE3 = lift . lift . throwE
+
+hoistEither2 :: (MonadTrans t, Monad m) 
+             => Either e a -> t (ExceptT e m) a -- ^
+hoistEither2 = lift . ExceptT . return
+
+hoistEither3 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+             => Either e a -> (stream (t (ExceptT e m))) a -- ^ 
+hoistEither3 = lift . lift . ExceptT . return
+
 foldE :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => t (ExceptT e m) (Either e r)  -- ^
         -> t (ExceptT e m) r
@@ -432,10 +452,10 @@ fails1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m)))
        -> t (ExceptT e m) r
 fails1 mapper action = action >>= lift . ExceptT . return . mapper
 
-fails2 :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (s (t (ExceptT e m)))) 
+fails2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (stream (t (ExceptT e m)))) 
        => (x -> Either e r) -- ^
-       -> s (t (ExceptT e m)) x  -- ^
-       -> s (t (ExceptT e m)) r
+       -> stream (t (ExceptT e m)) x  -- ^
+       -> stream (t (ExceptT e m)) r
 fails2 mapper action = action >>= lift . lift . ExceptT . return . mapper
 
 fails1M :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
@@ -444,10 +464,10 @@ fails1M :: (MonadTrans t, Monad m, Monad (t (ExceptT e m)))
         -> t (ExceptT e m) r
 fails1M mapperM action = action >>= mapperM >>= lift . ExceptT . return
 
-fails2M :: (MonadTrans s, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (s (t (ExceptT e m)))) 
+fails2M :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m)), Monad (stream (t (ExceptT e m)))) 
         => (x -> (t (ExceptT e m) (Either e r))) -- ^
-        -> s (t (ExceptT e m)) x  -- ^
-        -> s (t (ExceptT e m)) r
+        -> stream (t (ExceptT e m)) x  -- ^
+        -> stream (t (ExceptT e m)) r
 fails2M mapperM action = action >>= lift . mapperM >>= lift . lift . ExceptT . return
 
 -- throwE1 :: (MonadTrans t, Monad m, Monad (t (ExceptT e m))) => (e -> e -> t ExceptT e m a

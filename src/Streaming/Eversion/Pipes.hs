@@ -102,16 +102,16 @@ pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr
     The result will be a 'TransvertibleM' that works in 'ExceptT'. 
 
 >>> :{ 
-    let adapt = transvertM (pipeTransvertibleM (fails2 (first (\_ -> ())) . TE.decode (TE.utf8 . TE.eof)))
-    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["decode","this"]
+    let tr = transvertM (pipeTransvertibleM (\prod -> TE.decode (TE.utf8 . TE.eof) prod >>= hoistEither3 . first (const ())))
+    in  runExceptT $ L.foldM (tr (L.generalize L.mconcat)) ["decode","this"]
     :}
 Right "decodethis"
 
     If any undecodable bytes are found, the computation halts with the undecoded bytes as the error.
 
 >>> :{ 
-    let adapt = transvertM (pipeTransvertibleM (fails2 (first (\_ -> ())) . TE.decode (TE.utf8 . TE.eof)))
-    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
+    let tr = transvertM (pipeTransvertibleM (\prod -> TE.decode (TE.utf8 . TE.eof) prod >>= hoistEither3 . first (const ())))
+    in  runExceptT $ L.foldM (tr (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
     :}
 Left ()
 
