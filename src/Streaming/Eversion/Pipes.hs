@@ -92,23 +92,20 @@ pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr
 
 {- $examples
  
-    Allows you to plug any of the "non-lens decoding functions" from "Pipes.Text.Encoding" into 'pipeTransvertibleM'. Just 
-    compose the decoder with this function before passing it to 'pipeTransvertibleM'.
-
-    The result will be a 'TransvertibleM' that works in 'ExceptT'. 
+    Example of how to create a 'TransvertibleM' out a decoder from "Pipes.Text.Encoding":  
 
 >>> :{ 
     let adapt = transvertM (pipeTransvertibleM (\producer -> do result <- TE.decode (TE.utf8 . TE.eof) producer 
-                                                                hoistEither3 (first (const ()) result)))
+                                                                hoistEither2 (first (const ()) result)))
     in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["decode","this"]
     :}
 Right "decodethis"
 
-    If any undecodable bytes are found, the computation halts with the undecoded bytes as the error.
+    Another example, this time of a failed decoding. Ther first undecoded bytes are returned as the error:
 
 >>> :{ 
     let adapt = transvertM (pipeTransvertibleM (\producer -> do result <- TE.decode (TE.utf8 . TE.eof) producer 
-                                                                lift (hoistEither2 =<< bimapM take1 return result)))
+                                                                lift (hoistEither1 =<< bimapM take1 return result)))
         take1 leftoverproducer = do
             e <- Pipes.next leftoverproducer
             return (case e of

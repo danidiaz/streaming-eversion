@@ -40,15 +40,17 @@ module Streaming.Eversion (
     ,   runTransvertibleMIO
     ,   transvertMIO
         -- * Throwing errors
+    ,   throwE1
     ,   throwE2
-    ,   throwE3
+    ,   hoistEither1
     ,   hoistEither2
-    ,   hoistEither3
     ) where
 
+import           Prelude hiding ((.),id)
 import           Data.Bifunctor
 import           Data.Profunctor
 
+import           Control.Category
 import           Control.Foldl (Fold(..),FoldM(..))
 import qualified Control.Foldl as Foldl
 import           Streaming (Stream,Of(..),hoist,distribute)
@@ -243,6 +245,10 @@ instance Profunctor Transvertible where
     lmap f (Transvertible somefold) = Transvertible (somefold . S.map f)
     rmap = fmap
 
+instance Category Transvertible where
+    id = Transvertible id
+    (.) = \(Transvertible t1) (Transvertible t2) -> Transvertible (t1 . t2)
+
 data Pair a b = Pair !a !b
 
 data StreamState a b = Pristine (Stream (Of b) (Iteratee (Feed a)) ())
@@ -294,6 +300,10 @@ newtype TransvertibleM m a b =
 transvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r) -- ^
                   -> TransvertibleM m a b 
 transvertibleM = TransvertibleM
+
+instance Category (TransvertibleM m) where
+    id = TransvertibleM id
+    (.) = \(TransvertibleM t1) (TransvertibleM t2) -> TransvertibleM (t1 . t2)
 
 -- | Recover the stored function, discarding the transformer.
 --   
@@ -360,6 +370,10 @@ transvertM (TransvertibleM transducer) somefold = FoldM step begin done
 --   
 newtype TransvertibleMIO m a b = 
         TransvertibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+
+instance Category (TransvertibleMIO m) where
+    id = TransvertibleMIO id
+    (.) = \(TransvertibleMIO t1) (TransvertibleMIO t2) -> TransvertibleMIO (t1 . t2)
 
 instance Functor (TransvertibleMIO m a) where
     fmap f (TransvertibleMIO transducer) = TransvertibleMIO (S.map f . transducer) 
@@ -429,23 +443,23 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
 
     The result will be an 'EversibleM' that works on 'ExceptT'.
 
->>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE2 ()))) [1..10]
+>>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE1 ()))) [1..10]
 Left ()
 
 -} 
-throwE2 :: (MonadTrans t, Monad m) 
+throwE1 :: (MonadTrans t, Monad m) 
         => e -> t (ExceptT e m) a -- ^
-throwE2 = lift . throwE
+throwE1 = lift . throwE
 
-throwE3 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+throwE2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => e -> stream (t (ExceptT e m)) a -- ^
-throwE3 = lift . lift . throwE
+throwE2 = lift . lift . throwE
 
-hoistEither2 :: (MonadTrans t, Monad m) 
+hoistEither1 :: (MonadTrans t, Monad m) 
              => Either e a -> t (ExceptT e m) a -- ^
-hoistEither2 = lift . ExceptT . return
+hoistEither1 = lift . ExceptT . return
 
-hoistEither3 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
+hoistEither2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
              => Either e a -> (stream (t (ExceptT e m))) a -- ^ 
-hoistEither3 = lift . lift . ExceptT . return
+hoistEither2 = lift . lift . ExceptT . return
 
