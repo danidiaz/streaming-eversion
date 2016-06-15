@@ -9,7 +9,7 @@
    
     To get "interruptible" operations that can exit early with an error, put a
     'ExceptT' transformer just below the polymorphic monad transformer. See
-    'foldE'.
+    'throwE1' and 'throwE2'.
    
     Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 -}
@@ -73,7 +73,7 @@ import           Control.Comonad
 >>> import           Control.Foldl (Fold(..),FoldM(..))
 >>> import qualified Control.Foldl as L
 >>> import           Streaming (Stream,Of(..))
->>> import           Streaming.Prelude (yield,next)
+>>> import           Streaming.Prelude (yield,next,for)
 >>> import qualified Streaming.Prelude as S
 -}
 
@@ -439,14 +439,18 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
--- | $errors
---  foo 
+{- $errors
 
-{-| Throws error in an 'ExceptT' sitting below the topmost layer. 
+   foo 
+-}
+
+{-| Throws error in an 'ExceptT' sitting one layer below the topmost layer. 
 
 @
 throwE1 = lift . throwE
 @
+
+Often useful with 'evertM':
 
 >>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE1 ()))) [1..10]
 Left ()
@@ -459,8 +463,17 @@ throwE1 = lift . throwE
 {-| Throws error in an 'ExceptT' sitting two layers below the topmost layer.
  
 @
-throwE1 = lift . lift . throwE
+throwE2 = lift . lift . throwE
 @
+
+Often useful with 'tansvertibleM':
+
+>>> :{ 
+    runExceptT $ L.foldM (transvertM (transvertibleM (\stream -> for stream (\_ -> throwE2 ()))) 
+                                     (L.generalize L.list)) 
+                         [1..10]
+    :}
+Left ()
 
 -}
 throwE2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
