@@ -8,8 +8,10 @@
     (suitably polymorphic) operations on 'Stream's will unify with them.
    
     To get "interruptible" operations that can exit early with an error, put a
-    'ExceptT' transformer just below the polymorphic monad transformer. See
-    'throwE1' and 'throwE2'.
+    'ExceptT' transformer just below the polymorphic monad transformer. In
+    practice, that means lifting functions like
+    'Control.Monad.Trans.ExceptT.throwE' and 'Control.Error.Util.hoistEither' a
+    number of times.
    
     Inspired by http://pchiusano.blogspot.com.es/2011/12/programmatic-translation-to-iteratees.html
 -}
@@ -39,12 +41,6 @@ module Streaming.Eversion (
     ,   transvertibleMIO
     ,   runTransvertibleMIO
     ,   transvertMIO
-        -- * Throwing errors
-        -- $errors
-    ,   throwE1
-    ,   throwE2
-    ,   hoistEither1
-    ,   hoistEither2
     ) where
 
 import           Prelude hiding ((.),id)
@@ -438,55 +434,4 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
                 advancefinal step1 future
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
-
-{- $errors
-
-   foo 
--}
-
-{-| Throws error in an 'ExceptT' sitting one layer below the topmost layer. 
-
-@
-throwE1 = lift . throwE
-@
-
-Often useful with 'evertM':
-
->>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE1 ()))) [1..10]
-Left ()
-
--} 
-throwE1 :: (MonadTrans t, Monad m) 
-        => e -> t (ExceptT e m) a -- ^
-throwE1 = lift . throwE
-
-{-| Throws error in an 'ExceptT' sitting two layers below the topmost layer.
- 
-@
-throwE2 = lift . lift . throwE
-@
-
-Often useful with 'tansvertibleM':
-
->>> :{ 
-    runExceptT $ L.foldM (transvertM (transvertibleM (\stream -> for stream (\_ -> throwE2 ()))) 
-                                     (L.generalize L.list)) 
-                         [1..10]
-    :}
-Left ()
-
--}
-throwE2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-        => e -> stream (t (ExceptT e m)) a -- ^
-throwE2 = lift . lift . throwE
-
--- | Hoists an 'Either' to an 'ExceptT' sitting below the topmost layer.
-hoistEither1 :: (MonadTrans t, Monad m) 
-             => Either e a -> t (ExceptT e m) a -- ^
-hoistEither1 = lift . ExceptT . return
-
--- | Hoists an 'Either' to an 'ExceptT' sitting two layers below the topmost layer.
-hoistEither2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
-             => Either e a -> (stream (t (ExceptT e m))) a -- ^ 
-hoistEither2 = lift . lift . ExceptT . return
 

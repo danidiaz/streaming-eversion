@@ -26,7 +26,6 @@ module Streaming.Eversion.Pipes (
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
 
 import           Streaming(Of(..))
 import qualified Streaming.Prelude
@@ -39,6 +38,7 @@ import           Pipes.Prelude
 >>> import           Data.Functor.Identity
 >>> import           Data.Bifunctor
 >>> import           Data.Bitraversable
+>>> import           Control.Error
 >>> import           Control.Monad
 >>> import           Control.Monad.Trans.Except
 >>> import           Control.Monad.Trans.Identity
@@ -49,8 +49,9 @@ import           Pipes.Prelude
 >>> import qualified Streaming.Prelude as S
 >>> import           Pipes
 >>> import qualified Pipes.Prelude as P
->>> import qualified Pipes.Text as T
->>> import qualified Pipes.Text.Encoding as TE
+>>> import qualified Pipes.Text as PT
+>>> import qualified Pipes.Text.Encoding as PT
+>>> import qualified Pipes.ByteString as PB
 >>> import           Lens.Micro.Extras
 -}
 
@@ -92,27 +93,31 @@ pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr
 
 {- $examples
  
-    Example of how to create a 'TransvertibleM' out a decoder from "Pipes.Text.Encoding":  
+    Creating a 'TransvertibleM' out a decoder from "Pipes.Text.Encoding". In
+    case the decoding fails, part of the leftovers are read in order to build
+    the error value.  
 
 >>> :{ 
-    let adapt = transvertM (pipeTransvertibleM (\producer -> do result <- TE.decode (TE.utf8 . TE.eof) producer 
-                                                                hoistEither2 (first (const ()) result)))
-    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["decode","this"]
+    let trans = transvertM (pipeTransvertibleM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
+                                                                lift (case result of
+                                                                        Left ls -> sample ls >>= lift . throwE
+                                                                        Right r -> return r)))
+        sample leftovers = L.purely P.fold L.mconcat (void (view (PB.splitAt 5) leftovers))
+    in  runExceptT $ L.foldM (trans (L.generalize L.mconcat)) ["decode","this"]
     :}
 Right "decodethis"
 
-    Another example, this time of a failed decoding. Ther first undecoded bytes are returned as the error:
-
 >>> :{ 
-    let adapt = transvertM (pipeTransvertibleM (\producer -> do result <- TE.decode (TE.utf8 . TE.eof) producer 
-                                                                lift (hoistEither1 =<< bimapM take1 return result)))
-        take1 leftoverproducer = do
-            e <- Pipes.next leftoverproducer
-            return (case e of
-                Left _ -> mempty
-                Right (bytes,_) -> bytes)
-    in  runExceptT $ L.foldM (adapt (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
+    let trans = transvertM (pipeTransvertibleM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
+                                                                lift (case result of
+                                                                        Left ls -> sample ls >>= lift . throwE
+                                                                        Right r -> return r)))
+        sample leftovers = L.purely P.fold L.mconcat (void (view (PB.splitAt 8) leftovers))
+    in  runExceptT $ L.foldM (trans (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
     :}
-Left "\195("
+Left "\195(sequen"
+
+Note that the errors are thrown in an 'ExceptT' layer below the 'Pipes.Producer'
+and the polymorphic transformer.
 
 -}

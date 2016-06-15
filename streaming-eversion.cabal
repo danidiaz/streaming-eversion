@@ -31,7 +31,7 @@ Library
         profunctors   >= 5                 ,
         free          >= 4                 ,         
         foldl         >= 1.1.5             ,
-        pipes         >= 4.2.0             ,
+        pipes         >= 4.1.0             ,
         streaming     >= 0.1.4.2           
     Exposed-Modules:
         Streaming.Eversion
@@ -44,13 +44,15 @@ test-suite doctests
   hs-source-dirs: tests
   main-is:        doctests.hs
   build-depends:
-        base          >= 4.4 && < 5        ,
-        doctest       >= 0.10.1            ,
-        foldl         >= 1.1.5             ,
-        pipes         >= 4.1.9             ,
-        pipes-text    >= 0.0.2.2           ,
-        streaming     >= 0.1.4.2           ,       
-        microlens     >= 0.4.2.1    
+        base             >= 4.4 && < 5     ,
+        doctest          >= 0.10.1         ,
+        foldl            >= 1.1.5          ,
+        pipes            >= 4.1.0          ,
+        pipes-text       >= 0.0.2.2        ,
+        pipes-bytestring >= 2.1.1          ,
+        streaming        >= 0.1.4.2        ,       
+        microlens        >= 0.4.2.1        ,
+        errors           >= 2.1.0
 test-suite tests
   type:           exitcode-stdio-1.0
   ghc-options:    -Wall -threaded

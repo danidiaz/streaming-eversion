@@ -24,7 +24,7 @@ Usually, defining stream transformations in pull-based mode is easier and feels
 more natural. The pipes ecosystem already provides a lot of them:
 [parsers](http://hackage.haskell.org/package/pipes-parse),
 [decoders](http://hackage.haskell.org/package/pipes-text),
-[splitters](http://hackage.haskell.org/package/pipes-group)...
+[splitters](http://hackage.haskell.org/package/pipes-group).
 
 However, push-based mode also has advantages. Push-based abstractions are not
 tied to a particular type of source because data is fed externally. And foldl

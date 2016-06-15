@@ -2,4 +2,7 @@
 =======
 
 - Eversible, not Evertible!
+- Removed special purpose error functions.
+- Added some utility functions.
+- Added Category instances.
 
