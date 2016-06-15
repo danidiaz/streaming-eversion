@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-{-| The pull-to-push transformations in this module require functions that are 
+{-| Most pull-to-push transformations in this module require functions that are 
     polymorphic over a monad transformer.  
     
     Because of this, some of the type signatures look scary, but actually many
@@ -40,6 +40,7 @@ module Streaming.Eversion (
     ,   runTransvertibleMIO
     ,   transvertMIO
         -- * Throwing errors
+        -- $errors
     ,   throwE1
     ,   throwE2
     ,   hoistEither1
@@ -438,10 +439,14 @@ transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
             TF.Pure (Left ()) -> return innerfold
             TF.Free _ -> error continuedAfterEOF
 
-{-| If your stream-folding computation can fail early returning a 'Left',
-    compose it with this function before passing it to 'eversibleM'. 
+-- | $errors
+--  foo 
 
-    The result will be an 'EversibleM' that works on 'ExceptT'.
+{-| Throws error in an 'ExceptT' sitting below the topmost layer. 
+
+@
+throwE1 = lift . throwE
+@
 
 >>> runExceptT $ L.foldM (evertM (eversibleM (\_ -> throwE1 ()))) [1..10]
 Left ()
@@ -451,14 +456,23 @@ throwE1 :: (MonadTrans t, Monad m)
         => e -> t (ExceptT e m) a -- ^
 throwE1 = lift . throwE
 
+{-| Throws error in an 'ExceptT' sitting two layers below the topmost layer.
+ 
+@
+throwE1 = lift . lift . throwE
+@
+
+-}
 throwE2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
         => e -> stream (t (ExceptT e m)) a -- ^
 throwE2 = lift . lift . throwE
 
+-- | Hoists an 'Either' to an 'ExceptT' sitting below the topmost layer.
 hoistEither1 :: (MonadTrans t, Monad m) 
              => Either e a -> t (ExceptT e m) a -- ^
 hoistEither1 = lift . ExceptT . return
 
+-- | Hoists an 'Either' to an 'ExceptT' sitting two layers below the topmost layer.
 hoistEither2 :: (MonadTrans stream, MonadTrans t, Monad m, Monad (t (ExceptT e m))) 
              => Either e a -> (stream (t (ExceptT e m))) a -- ^ 
 hoistEither2 = lift . lift . ExceptT . return
