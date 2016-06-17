@@ -1,3 +1,8 @@
+0.2.0.1
+=======
+- Implemented the "iteratee" using Stream ((->a) m), as suggested here:
+https://groups.google.com/forum/#!topic/haskell-pipes/7n6NPTmxPKY by M.T.
+
 0.2.0.0
 =======
 

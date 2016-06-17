@@ -49,8 +49,7 @@ import           Data.Profunctor
 
 import           Control.Category
 import           Control.Foldl (Fold(..),FoldM(..))
-import qualified Control.Foldl as Foldl
-import           Streaming (Stream,Of(..),hoist,distribute)
+import           Streaming (Stream,Of(..),yields,hoist,distribute,Sum(..),inspect,unseparate)
 import           Streaming.Prelude (yield,next)
 import qualified Streaming.Prelude as S
 
@@ -59,8 +58,6 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Identity
 import           Control.Monad.Free
 import qualified Control.Monad.Trans.Free as TF
-import           Control.Monad.Trans.Except
-import           Control.Comonad
 
 {- $setup
 >>> import           Data.Functor.Identity
@@ -284,8 +281,6 @@ transvert (Transvertible transducer) (Fold innerstep innerbegin innerdone) = Fol
             Pure (Right (a,future)) -> advancefinal (innerstep innerstate a) future
             Free _ -> error continuedAfterEOF
 
-data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
-                        | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
 
 -- | Like 'Transvertible', but gives the stream-transforming function access to a base monad.
 --   
@@ -315,6 +310,21 @@ instance Profunctor (TransvertibleM m) where
     lmap f (TransvertibleM somefold) = TransvertibleM (somefold . S.map f)
     rmap = fmap
 
+cat :: Monad m => Stream (Of a) (Stream ((->) (Feed a)) m) ()
+cat = do
+    r <- lift (yields id)
+    case r of
+        Input a -> do
+            yield a
+            cat
+        EOF -> return ()
+
+data StreamStateM m a b = PristineM (Stream (Sum (Of b) ((->) (Feed a))) m ())
+                        | WaitingM  (Feed a -> Stream (Sum (Of b) ((->) (Feed a))) m ())
+
+-- data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
+--                         | WaitingM  (Feed a -> IterateeT (Feed a) m (Either () (b, Stream (Of b) (IterateeT (Feed a) m) ())))
+-- 
 transvertM :: Monad m 
            => TransvertibleM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
@@ -322,47 +332,47 @@ transvertM (TransvertibleM transducer) (FoldM innerstep innerbegin innerdone) = 
     where
     begin = do
         innerbegin' <- innerbegin
-        return (Pair innerbegin' (PristineM (transducer evertedStreamM)))
+        return (Pair innerbegin' (PristineM (unseparate (transducer cat))))
     step (Pair innerstate (PristineM pristine)) i = do
         s <- advance innerstate pristine 
         step s i
     step (Pair innerstate (WaitingM waiting)) i = do 
-        s <- TF.runFreeT (waiting (Input i))
+        s <- inspect (waiting (Input i))
         case s of
-            TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a, future)) -> do
+            Left () -> error stoppedBeforeEOF
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advance step1 future 
-            TF.Free f -> return (Pair innerstate (WaitingM f))
+            Right (InR f) -> return (Pair innerstate (WaitingM f))
     advance innerstate stream = do 
-        r <- TF.runFreeT (next stream) 
+        r <- inspect stream 
         case r of
-            TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a,future)) -> do
+            Left () -> error stoppedBeforeEOF
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advance step1 future
-            TF.Free f -> return (Pair innerstate (WaitingM f))
+            Right (InR f) -> return (Pair innerstate (WaitingM f))
     done (Pair innerstate (PristineM pristine)) = do
         s <- advance innerstate pristine 
         done s
     done (Pair innerstate (WaitingM waiting)) = do
-        s <- TF.runFreeT (waiting EOF)
+        s <- inspect (waiting EOF)
         case s of
-            TF.Pure (Left ()) -> do
+            Left () -> do
                 innerdone innerstate
-            TF.Pure (Right (a,future)) -> do
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 r <- advancefinal step1 future
                 innerdone r
-            TF.Free _ -> error continuedAfterEOF
+            Right _ -> error continuedAfterEOF
     advancefinal innerstate stream = do
-        r <- TF.runFreeT (next stream) 
+        r <- inspect stream
         case r of
-            TF.Pure (Right (a,future)) -> do
+            Left () -> return innerstate
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advancefinal step1 future
-            TF.Pure (Left ()) -> return innerstate
-            TF.Free _ -> error continuedAfterEOF
+            Right (InR _) -> error continuedAfterEOF
 
 
 -- | Like 'TransvertibleM', but gives the stream-transforming function the ability to use 'liftIO'.
@@ -397,45 +407,44 @@ transvertMIO (TransvertibleMIO transducer) (FoldM innerstep innerbegin innerdone
     where
     begin = do
         innerbegin' <- innerbegin
-        return (Pair innerbegin' (PristineM (transducer evertedStreamM)))
+        return (Pair innerbegin' (PristineM (unseparate (transducer cat))))
     step (Pair innerstate (PristineM pristine)) i = do
         s <- advance innerstate pristine 
         step s i
     step (Pair innerstate (WaitingM waiting)) i = do 
-        s <- TF.runFreeT (waiting (Input i))
+        s <- inspect (waiting (Input i))
         case s of
-            TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a, future)) -> do
+            Left () -> error stoppedBeforeEOF
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advance step1 future 
-            TF.Free f -> return (Pair innerstate (WaitingM f))
+            Right (InR f) -> return (Pair innerstate (WaitingM f))
     advance innerstate stream = do 
-        r <- TF.runFreeT (next stream) 
+        r <- inspect stream 
         case r of
-            TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a,future)) -> do
+            Left () -> error stoppedBeforeEOF
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advance step1 future
-            TF.Free f -> return (Pair innerstate (WaitingM f))
+            Right (InR f) -> return (Pair innerstate (WaitingM f))
     done (Pair innerstate (PristineM pristine)) = do
         s <- advance innerstate pristine 
         done s
     done (Pair innerstate (WaitingM waiting)) = do
-        s <- TF.runFreeT (waiting EOF)
+        s <- inspect (waiting EOF)
         case s of
-            TF.Pure (Left ()) -> do
+            Left () -> do
                 innerdone innerstate
-            TF.Pure (Right (a,future)) -> do
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 r <- advancefinal step1 future
                 innerdone r
-            TF.Free _ -> error continuedAfterEOF
+            Right _ -> error continuedAfterEOF
     advancefinal innerstate stream = do
-        r <- TF.runFreeT (next stream) 
+        r <- inspect stream
         case r of
-            TF.Pure (Right (a,future)) -> do
+            Left () -> return innerstate
+            Right (InL (a :> future)) -> do
                 step1 <- innerstep innerstate a
                 advancefinal step1 future
-            TF.Pure (Left ()) -> return innerstate
-            TF.Free _ -> error continuedAfterEOF
-
+            Right (InR _) -> error continuedAfterEOF
