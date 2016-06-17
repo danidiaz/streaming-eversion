@@ -40,11 +40,3 @@ to preprocess the inputs of a
 
 This library provides that.
 
-## Why so many newtypes?
-
-To avoid having to enable [-XImpredicativeTypes](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#impredicative-polymorphism).
-
-## Is it fast?
-
-I haven't benchmarked or optimized it. It is likely to be slow.
-

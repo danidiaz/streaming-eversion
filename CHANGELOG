@@ -1,7 +1,9 @@
-0.2.0.1
+0.3.0.0
 =======
-- Implemented the "iteratee" using Stream ((->a) m), as suggested here:
+- Implemented the improvements suggested by Michael Thompson here :
 https://groups.google.com/forum/#!topic/haskell-pipes/7n6NPTmxPKY by M.T.
+- Removed the newtypes. I mistakenly believed that they were needed to avoid
+having to enable -XImpredicativeTypes.
 
 0.2.0.0
 =======
