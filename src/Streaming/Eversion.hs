@@ -24,13 +24,10 @@ module Streaming.Eversion (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
-    ,   evertR
-    ,   evertR_
         -- * Stream transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
-    ,   transvertR
         -- * Internals
 --    ,   Feed(..)
     ,   generalEvertM
@@ -39,7 +36,7 @@ module Streaming.Eversion (
 
 import           Prelude 
 import           Control.Foldl (Fold(..),FoldM(..),generalize,simplify)
-import           Streaming (Stream,Of(..),Sum(..),inspect,unseparate,MonadResource)
+import           Streaming (Stream,Of(..),Sum(..),inspect,unseparate)
 import           Streaming.Internal
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -119,20 +116,6 @@ evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (
           -> FoldM m a () -- ^
 evertMIO_ phi = evertMIO (fmap (fmap ((:>) ())) phi)
 
-evertR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
-       -> FoldM m a x -- ^
-evertR phi = generalEvertM phi
-
-{-| 
- 
->>> runResourceT (L.foldM (evertR_ (S.writeFile "/dev/null")) ["aaa","bbb"]) 
-()
-
--}
-evertR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m r) 
-        -> FoldM m a () -- ^
-evertR_ phi = evertR (fmap (fmap ((:>) ())) phi)
-
 generalEvertM :: (Monad m) 
               => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream ((->) (Feed a)) m (Of b r))
               -> FoldM m a b -- ^
@@ -169,12 +152,6 @@ transvertMIO :: MonadIO m
              -> FoldM m b x -- ^
              -> FoldM m a x
 transvertMIO phi = generalTransvertM phi
-
-transvertR  :: MonadResource m 
-            => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-            -> FoldM m b x -- ^
-            -> FoldM m a x
-transvertR phi = generalTransvertM phi
 
 data Pair a b = Pair !a !b
 
