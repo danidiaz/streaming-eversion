@@ -10,10 +10,13 @@ module Streaming.Eversion.Pipes (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
+    ,   evertR
+    ,   evertR_
         -- * Producer transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
+    ,   transvertR
         -- * Examples
         -- $examples
     ) where
@@ -22,8 +25,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 
 import           Streaming(Of(..))
+import           Streaming(MonadResource)
 import qualified Streaming.Prelude
-import           Streaming.Eversion hiding (evert,evertM,evertM_,evertMIO,evertMIO_,transvert,transvertM,transvertMIO)
 import qualified Streaming.Eversion
 import           Pipes
 import           Pipes.Prelude
@@ -31,16 +34,11 @@ import           Control.Foldl (Fold(..),FoldM(..))
 
 {- $setup
 >>> :set -XOverloadedStrings
->>> import           Data.Functor.Identity
->>> import           Data.Bifunctor
->>> import           Data.Bitraversable
 >>> import           Control.Error
 >>> import           Control.Monad
 >>> import           Control.Monad.Trans.Except
->>> import           Control.Monad.Trans.Identity
 >>> import           Control.Foldl (Fold(..),FoldM(..))
 >>> import qualified Control.Foldl as L
->>> import           Streaming (Stream,Of(..))
 >>> import           Streaming.Prelude (yield,next)
 >>> import qualified Streaming.Prelude as S
 >>> import           Pipes
@@ -53,109 +51,79 @@ import           Control.Foldl (Fold(..),FoldM(..))
 
 -----------------------------------------------------------------------------------------
 
-evert :: (forall m r. Monad m => Producer a m r -> m (x,r)) -> Fold a x
+evert :: (forall m r. Monad m => Producer a m r -> m (x,r)) 
+      -> Fold a x -- ^
 evert phi = Streaming.Eversion.evert (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -> FoldM m a x
+evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) 
+       -> FoldM m a x -- ^
 evertM phi = Streaming.Eversion.evertM (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) -> FoldM m a ()
+evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) 
+        -> FoldM m a () -- ^
 evertM_ phi = Streaming.Eversion.evertM_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
 
-evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -> FoldM m a x
+evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) 
+         -> FoldM m a x -- ^
 evertMIO phi = Streaming.Eversion.evertMIO (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m r) -> FoldM m a ()
+evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m r) 
+          -> FoldM m a () -- ^
 evertMIO_ phi = Streaming.Eversion.evertMIO_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
 
+evertR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m (x,r)) 
+         -> FoldM m a x -- ^
+evertR phi = Streaming.Eversion.evertR (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
+evertR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m r) 
+          -> FoldM m a () -- ^
+evertR_ phi = Streaming.Eversion.evertR_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
+
+
 transvert :: (forall m r. Monad m => Producer a m r -> Producer b m r)
-          -> Fold b x 
+          -> Fold b x -- ^
           -> Fold a x 
 transvert phi = Streaming.Eversion.transvert (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 transvertM :: Monad m 
            => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> Producer b (t m) r)
-           -> FoldM m b x 
+           -> FoldM m b x -- ^
            -> FoldM m a x
 transvertM phi = Streaming.Eversion.transvertM (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 transvertMIO :: MonadIO m 
              => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> Producer b (t m) r)
-             -> FoldM m b x 
+             -> FoldM m b x -- ^
              -> FoldM m a x
 transvertMIO phi = Streaming.Eversion.transvertMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
---pipeEversibleM f = eversibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
---pipeEversibleM_ :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) -- ^
---              -> EversibleM m a ()
---pipeEversibleM_ f = eversibleM (\stream -> fmap (\r -> () :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+transvertR :: MonadResource m 
+             => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> Producer b (t m) r)
+             -> FoldM m b x -- ^
+             -> FoldM m a x
+transvertR phi = Streaming.Eversion.transvertR (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-
--- evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
--- evertM phi = Streamin.Eversion.evertM (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
--- 
--- evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
--- evertM_ = undefined
--- evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
--- evertMIO phi = unsafeEvertM phi
--- evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
--- evertMIO_ phi = unsafeEvertM phi
--- 
---pipeEversible :: (forall m r. Monad m => Producer a m r -> m (x,r)) -- ^
---             -> Eversible a x
---pipeEversible f = eversible (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
---pipeEversibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
---              -> EversibleM m a x
---pipeEversibleM f = eversibleM (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
---pipeEversibleM_ :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) -- ^
---              -> EversibleM m a ()
---pipeEversibleM_ f = eversibleM (\stream -> fmap (\r -> () :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
---pipeEversibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) -- ^
---                -> EversibleMIO m a x
---pipeEversibleMIO f = eversibleMIO (\stream -> fmap (\(x,r) -> x :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
---pipeEversibleMIO_ :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m r) -- ^
---                -> EversibleMIO m a ()
---pipeEversibleMIO_ f = eversibleMIO (\stream -> fmap (\r -> () :> r) (f (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---
--- pipeTransvertible :: (forall m r. Monad m => Producer a m r -> Producer b m r) -- ^
---                  -> Transvertible a b
--- pipeTransvertible pt = transvertible (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
--- 
--- pipeTransvertibleM :: (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
---                   -> TransvertibleM m a b
--- pipeTransvertibleM pt = transvertibleM (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
--- 
--- 
--- pipeTransvertibleMIO :: (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> Producer b (t m) r) -- ^
---                   -> TransvertibleMIO m a b
--- pipeTransvertibleMIO pt = transvertibleMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (pt (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
---  
 {- $examples
  
-    Creating a 'TransvertibleM' out a decoder from "Pipes.Text.Encoding". In
-    case the decoding fails, part of the leftovers are read in order to build
-    the error value.  
+    Applying a decoder from "Pipes.Text.Encoding" to the inputs of a Fold. In
+    case the decoding fails, part of the leftovers are read in order to build the
+    error value.  
 
 >>> :{ 
-    let trans = transvertM (pipeTransvertibleM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
-                                                                lift (case result of
-                                                                        Left ls -> sample ls >>= lift . throwE
-                                                                        Right r -> return r)))
+    let trans = transvertM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
+                                            lift (case result of
+                                                    Left ls -> sample ls >>= lift . throwE
+                                                    Right r -> return r))
         sample leftovers = L.purely P.fold L.mconcat (void (view (PB.splitAt 5) leftovers))
     in  runExceptT $ L.foldM (trans (L.generalize L.mconcat)) ["decode","this"]
     :}
 Right "decodethis"
 
 >>> :{ 
-    let trans = transvertM (pipeTransvertibleM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
-                                                                lift (case result of
-                                                                        Left ls -> sample ls >>= lift . throwE
-                                                                        Right r -> return r)))
+    let trans = transvertM (\producer -> do result <- PT.decode (PT.utf8 . PT.eof) producer 
+                                            lift (case result of
+                                                    Left ls -> sample ls >>= lift . throwE
+                                                    Right r -> return r))
         sample leftovers = L.purely P.fold L.mconcat (void (view (PB.splitAt 8) leftovers))
     in  runExceptT $ L.foldM (trans (L.generalize L.mconcat)) ["invalid \xc3\x28","sequence"]
     :}

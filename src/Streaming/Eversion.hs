@@ -24,33 +24,25 @@ module Streaming.Eversion (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
+    ,   evertR
+    ,   evertR_
         -- * Stream transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
+    ,   transvertR
         -- * Internals
-    ,   Feed(..)
-    ,   unsafeEvertM
-    ,   unsafeTransvertM
+--    ,   Feed(..)
+    ,   generalEvertM
+    ,   generalTransvertM
     ) where
 
-import           Prelude hiding ((.),id)
-import           Data.Bifunctor
-import           Data.Profunctor
-
-import           Control.Category
+import           Prelude 
 import           Control.Foldl (Fold(..),FoldM(..),generalize,simplify)
-import           Streaming (Stream,Of(..),yields,hoist,distribute,Sum(..),inspect,unseparate)
-import           Streaming.Prelude (yield,next)
+import           Streaming (Stream,Of(..),Sum(..),inspect,unseparate,MonadResource)
 import           Streaming.Internal
-import qualified Streaming.Prelude as S
-
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Data.Functor.Identity
-import           Control.Monad.Trans.Identity
-import           Control.Monad.Free
-import qualified Control.Monad.Trans.Free as TF
 
 {- $setup
 >>> import           Data.Functor.Identity
@@ -67,134 +59,11 @@ import qualified Control.Monad.Trans.Free as TF
 
 data Feed a = Input a | EOF
 
--- -- | A stream-folding function that can be turned into a pure, push-based fold. 
--- newtype Eversible a x = 
---         Eversible (forall m r. Monad m => Stream (Of a) m r -> m (Of x r))  
--- 
--- instance Functor (Eversible a) where
---     fmap f (Eversible somefold) = Eversible (fmap (first f) . somefold) 
--- 
--- instance Profunctor Eversible where
---     lmap f (Eversible somefold) = Eversible (somefold . S.map f)
---     rmap = fmap
-
 stoppedBeforeEOF :: String
 stoppedBeforeEOF = "Stopped before receiving EOF."
 
 continuedAfterEOF :: String
 continuedAfterEOF = "Continued after receiving EOF."
-
--- eversible :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Eversible a x
--- eversible = Eversible
--- 
--- 
--- evert :: Eversible a x -> Fold a x
--- evert (Eversible consumer) = Fold step begin done
---     where
---     begin = consumer evertedStream
---     step s a = case s of
---         Pure _ -> error stoppedBeforeEOF
---         Free f -> f (Input a)
---     done s = case s of
---         Pure _ -> error stoppedBeforeEOF
---         Free f -> case f EOF of
---             Pure (a :> ()) -> a
---             Free _ -> error continuedAfterEOF
-
-
-{- | Like 'Eversible', but gives the stream-folding function access to a base monad.
-   
->>> :{
-    let consume stream = lift (putStrLn "x") >> S.effects stream
-    in  L.foldM (evertM (eversibleM_ consume)) ["a","b","c"]
-    :}
-x
-
-    Note however that control operations can't be lifted through the transformer.
--}
--- newtype EversibleM m a x = 
---         EversibleM (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
--- 
--- instance Functor (EversibleM m a) where
---     fmap f (EversibleM somefold) = EversibleM (fmap (first f) . somefold) 
--- 
--- instance Profunctor (EversibleM m) where
---     lmap f (EversibleM somefold) = EversibleM (somefold . S.map f)
---     rmap = fmap
--- 
--- eversibleM ::(forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
---             -> EversibleM m a x
--- eversibleM = EversibleM                                                      
--- 
--- eversibleM_ :: (forall t r . (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m r) -- ^
---             -> EversibleM m a ()
--- eversibleM_ f = EversibleM (fmap (fmap ((:>) ())) f)
--- 
--- evertM :: Monad m => EversibleM m a x -> FoldM m a x
--- evertM (EversibleM consumer) = FoldM step begin done
---     where
---     begin = return (consumer evertedStreamM)
---     step (TF.FreeT ms) i = do
---         s <- ms
---         case s of
---             TF.Pure _ -> error stoppedBeforeEOF
---             TF.Free f -> return (f (Input i))
---     done (TF.FreeT ms) = do
---         s <- ms
---         case s of 
---             TF.Pure _ -> error stoppedBeforeEOF
---             TF.Free f -> do
---                 let TF.FreeT ms' = f EOF
---                 s' <- ms'
---                 case s' of
---                     TF.Pure (a :> ()) -> return a
---                     TF.Free _ -> error continuedAfterEOF
--- 
--- {-| Like 'EversibleM', but gives the stream-consuming function the ability to use 'liftIO'.
---  
--- >>> L.foldM (evertMIO (eversibleMIO_ S.print)) ["a","b","c"]
--- "a"
--- "b"
--- "c"
--- 
--- -}
--- newtype EversibleMIO m a x = 
---         EversibleMIO (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
--- 
--- instance Functor (EversibleMIO m a) where
---     fmap f (EversibleMIO somefold) = EversibleMIO (fmap (first f) . somefold) 
--- 
--- instance Profunctor (EversibleMIO m) where
---     lmap f (EversibleMIO somefold) = EversibleMIO (somefold . S.map f)
---     rmap = fmap
--- 
--- eversibleMIO ::(forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -- ^
---             -> EversibleMIO m a x
--- eversibleMIO = EversibleMIO                                                      
--- 
--- eversibleMIO_ :: (forall t r . (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m r) -- ^
---               -> EversibleMIO m a ()
--- eversibleMIO_ f = EversibleMIO (fmap (fmap ((:>) ())) f)
--- 
--- evertMIO :: MonadIO m => EversibleMIO m a x -> FoldM m a x 
--- evertMIO (EversibleMIO consumer) = FoldM step begin done
---     where
---     begin = return (consumer evertedStreamM)
---     step (TF.FreeT ms) i = do
---         s <- ms
---         case s of
---             TF.Pure _ -> error stoppedBeforeEOF
---             TF.Free f -> return (f (Input i))
---     done (TF.FreeT ms) = do
---         s <- ms
---         case s of 
---             TF.Pure _ -> error stoppedBeforeEOF
---             TF.Free f -> do
---                 let TF.FreeT ms' = f EOF
---                 s' <- ms'
---                 case s' of
---                     TF.Pure (a :> ()) -> return a
---                     TF.Free _ -> error continuedAfterEOF
 
 internalsCat :: Monad m => Stream (Of a) (Stream ((->) (Feed a)) m) ()        
 internalsCat = do
@@ -212,30 +81,62 @@ internalsCat = do
 --             cat
 --         EOF -> return ()
 
-evert :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) -> Fold a x
-evert phi = simplify (unsafeEvertM phi)
+evert :: (forall m r. Monad m => Stream (Of a) m r -> m (Of x r)) 
+      -> Fold a x -- ^
+evert phi = simplify (generalEvertM phi)
 
-evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
-evertM phi = unsafeEvertM phi
+{- | Like 'evert', but gives the stream-folding function access to a base monad.
+   
+>>> :{
+    let consume stream = lift (putStrLn "x") >> S.effects stream
+    in  L.foldM (evertM_ consume) ["a","b","c"]
+    :}
+x
 
-evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m r) -> FoldM m a ()
+    Note however that control operations can't be lifted through the transformer.
+-}
+evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+       -> FoldM m a x -- ^
+evertM phi = generalEvertM phi
+
+evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> t m r) 
+        -> FoldM m a () -- ^
 evertM_ phi = evertM (fmap (fmap ((:>) ())) phi)
 
-evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) -> FoldM m a x
-evertMIO phi = unsafeEvertM phi
+{-| Like 'evertM', but gives the stream-consuming function the ability to use 'liftIO'.
+ 
+>>> L.foldM (evertMIO_ S.print) ["a","b","c"]
+"a"
+"b"
+"c"
 
-evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m r) -> FoldM m a ()
+-}
+evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+         -> FoldM m a x -- ^
+evertMIO phi = generalEvertM phi
+
+evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> t m r) 
+          -> FoldM m a () -- ^
 evertMIO_ phi = evertMIO (fmap (fmap ((:>) ())) phi)
 
-{-| A client with direct access to this function could supply a consumer that
-    sneakily fed an EOF to the iteratee, trigerring an error. It's better to
-    provide various wrapper functions that hide the iteratee transformer behind
-    a polymorphic type variable.  
+evertR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
+       -> FoldM m a x -- ^
+evertR phi = generalEvertM phi
+
+{-| 
+ 
+>>> runResourceT (L.foldM (evertR_ (S.writeFile "/dev/null")) ["aaa","bbb"]) 
+()
+
 -}
-unsafeEvertM :: (Monad m) 
-            => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream ((->) (Feed a)) m (Of b r))
-            -> FoldM m a b
-unsafeEvertM consumer = FoldM step begin done
+evertR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m r) 
+        -> FoldM m a () -- ^
+evertR_ phi = evertR (fmap (fmap ((:>) ())) phi)
+
+generalEvertM :: (Monad m) 
+              => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream ((->) (Feed a)) m (Of b r))
+              -> FoldM m a b -- ^
+generalEvertM consumer = FoldM step begin done
     where
     begin = return (consumer internalsCat)
     step str i = case str of       
@@ -247,44 +148,44 @@ unsafeEvertM consumer = FoldM step begin done
       case e of
         Left _ -> error stoppedBeforeEOF
         Right f -> do
-          e <- inspect (f EOF)
-          case e of
+          e' <- inspect (f EOF)
+          case e' of
             Left (a :> ()) -> return a
             Right _ -> error continuedAfterEOF 
 
-
 transvert :: (forall m r. Monad m => Stream (Of a) m r -> Stream (Of b) m r)
-          -> Fold b x 
+          -> Fold b x -- ^
           -> Fold a x 
-transvert phi = \somefold -> simplify ((unsafeTransvertM phi) (generalize somefold))
+transvert phi = \somefold -> simplify ((generalTransvertM phi) (generalize somefold))
 
 transvertM :: Monad m 
            => (forall t r. (MonadTrans t, Monad (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-           -> FoldM m b x 
+           -> FoldM m b x -- ^
            -> FoldM m a x
-transvertM phi = unsafeTransvertM phi
+transvertM phi = generalTransvertM phi
 
 transvertMIO :: MonadIO m 
              => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-             -> FoldM m b x 
+             -> FoldM m b x -- ^
              -> FoldM m a x
-transvertMIO phi = unsafeTransvertM phi
+transvertMIO phi = generalTransvertM phi
+
+transvertR  :: MonadResource m 
+            => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
+            -> FoldM m b x -- ^
+            -> FoldM m a x
+transvertR phi = generalTransvertM phi
 
 data Pair a b = Pair !a !b
 
 data StreamStateM m a b = PristineM (Stream (Sum (Of b) ((->) (Feed a))) m ())
                         | WaitingM  (Feed a -> Stream (Sum (Of b) ((->) (Feed a))) m ())
 
-{-| A client with direct access to this function could supply a consumer that
-    sneakily fed an EOF to the iteratee, trigerring an error. It's better to
-    provide various wrapper functions that hide the iteratee transformer behind
-    a polymorphic type variable.  
--}
-unsafeTransvertM :: Monad m 
-                 => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream (Of b) (Stream ((->) (Feed a)) m) r) -- ^
-                 -> FoldM m b x 
-                 -> FoldM m a x
-unsafeTransvertM transducer (FoldM innerstep innerbegin innerdone) = FoldM step begin done
+generalTransvertM :: Monad m 
+                  => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream (Of b) (Stream ((->) (Feed a)) m) r) -- ^
+                  -> FoldM m b x 
+                  -> FoldM m a x
+generalTransvertM transducer (FoldM innerstep innerbegin innerdone) = FoldM step begin done
     where
     begin = do
         innerbegin' <- innerbegin
