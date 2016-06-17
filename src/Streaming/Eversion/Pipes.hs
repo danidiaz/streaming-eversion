@@ -10,10 +10,13 @@ module Streaming.Eversion.Pipes (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
+    ,   evertR
+    ,   evertR_
         -- * Producer transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
+    ,   transvertR
         -- * Examples
         -- $examples
     ) where
@@ -21,7 +24,7 @@ module Streaming.Eversion.Pipes (
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 
-import           Streaming(Of(..))
+import           Streaming(Of(..),MonadResource)
 import qualified Streaming.Prelude
 import qualified Streaming.Eversion
 import           Pipes
@@ -67,6 +70,14 @@ evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer
           -> FoldM m a () -- ^
 evertMIO_ phi = Streaming.Eversion.evertMIO_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
 
+evertR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m (x,r)) 
+         -> FoldM m a x -- ^
+evertR phi = Streaming.Eversion.evertR (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
+evertR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m r) 
+          -> FoldM m a () -- ^
+evertR_ phi = Streaming.Eversion.evertR_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
+
 transvert :: (forall m r. Monad m => Producer a m r -> Producer b m r)
           -> Fold b x -- ^
           -> Fold a x 
@@ -83,6 +94,13 @@ transvertMIO :: MonadIO m
              -> FoldM m b x -- ^
              -> FoldM m a x
 transvertMIO phi = Streaming.Eversion.transvertMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
+transvertR :: MonadResource m 
+             => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> Producer b (t m) r)
+             -> FoldM m b x -- ^
+             -> FoldM m a x
+transvertR phi = Streaming.Eversion.transvertR (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+
 
 {- $examples
  
