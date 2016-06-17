@@ -258,30 +258,30 @@ transvertible = Transvertible
 
 transvert :: Transvertible b a 
           -> (forall x. Fold a x -> Fold b x)
-transvert (Transvertible transducer) somefold = Fold step begin done
+transvert (Transvertible transducer) (Fold innerstep innerbegin innerdone) = Fold step begin done
     where
-    begin = Pair somefold (Pristine (transducer evertedStream))
-    step (Pair innerfold (Pristine pristine)) i = step (advance innerfold pristine) i
-    step (Pair innerfold (Waiting waiting)) i = 
+    begin = Pair innerbegin (Pristine (transducer evertedStream))
+    step (Pair innerstate (Pristine pristine)) i = step (advance innerstate pristine) i
+    step (Pair innerstate (Waiting waiting)) i = 
         case waiting (Input i) of
             Pure (Left ()) -> error stoppedBeforeEOF
-            Pure (Right (a, stream)) -> advance (Foldl.fold (duplicate innerfold) [a]) stream
-            Free f -> Pair innerfold (Waiting f)
-    advance innerfold stream =  
+            Pure (Right (a, stream)) -> advance (innerstep innerstate a) stream
+            Free f -> Pair innerstate (Waiting f)
+    advance innerstate stream =  
         case next stream of
             Pure (Left ()) -> error stoppedBeforeEOF
-            Pure (Right (a,future)) -> advance (Foldl.fold (duplicate innerfold) [a]) future
-            Free f -> Pair innerfold (Waiting f)
-    done (Pair innerfold (Pristine pristine)) = done (advance innerfold pristine) 
-    done (Pair innerfold (Waiting waiting)) =
+            Pure (Right (a,future)) -> advance (innerstep innerstate a) future
+            Free f -> Pair innerstate (Waiting f)
+    done (Pair innerstate (Pristine pristine)) = done (advance innerstate pristine) 
+    done (Pair innerstate (Waiting waiting)) =
         case waiting EOF of
-            Pure (Left ()) -> extract innerfold
-            Pure (Right (a, stream)) -> extract (advancefinal (Foldl.fold (duplicate innerfold) [a]) stream)
+            Pure (Left ()) -> innerdone innerstate
+            Pure (Right (a, stream)) -> innerdone (advancefinal (innerstep innerstate a) stream)
             Free _ -> error continuedAfterEOF
-    advancefinal innerfold stream =  
+    advancefinal innerstate stream =  
         case next stream of
-            Pure (Left ()) -> innerfold 
-            Pure (Right (a,future)) -> advancefinal (Foldl.fold (duplicate innerfold) [a]) future
+            Pure (Left ()) -> innerstate 
+            Pure (Right (a,future)) -> advancefinal (innerstep innerstate a) future
             Free _ -> error continuedAfterEOF
 
 data StreamStateM m a b = PristineM (Stream (Of b) (IterateeT (Feed a) m) ())
@@ -318,48 +318,50 @@ instance Profunctor (TransvertibleM m) where
 transvertM :: Monad m 
            => TransvertibleM m b a 
            -> (forall x . FoldM m a x -> FoldM m b x)
-transvertM (TransvertibleM transducer) somefold = FoldM step begin done
+transvertM (TransvertibleM transducer) (FoldM innerstep innerbegin innerdone) = FoldM step begin done
     where
-    begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
-    step (Pair innerfold (PristineM pristine)) i = do
-        s <- advance innerfold pristine 
+    begin = do
+        innerbegin' <- innerbegin
+        return (Pair innerbegin' (PristineM (transducer evertedStreamM)))
+    step (Pair innerstate (PristineM pristine)) i = do
+        s <- advance innerstate pristine 
         step s i
-    step (Pair innerfold (WaitingM waiting)) i = do 
+    step (Pair innerstate (WaitingM waiting)) i = do 
         s <- TF.runFreeT (waiting (Input i))
         case s of
             TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a, nexx)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
-                advance step1 nexx 
-            TF.Free f -> return (Pair innerfold (WaitingM f))
-    advance innerfold stream = do 
+            TF.Pure (Right (a, future)) -> do
+                step1 <- innerstep innerstate a
+                advance step1 future 
+            TF.Free f -> return (Pair innerstate (WaitingM f))
+    advance innerstate stream = do 
         r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 advance step1 future
-            TF.Free f -> return (Pair innerfold (WaitingM f))
-    done (Pair innerfold (PristineM pristine)) = do
-        s <- advance innerfold pristine 
+            TF.Free f -> return (Pair innerstate (WaitingM f))
+    done (Pair innerstate (PristineM pristine)) = do
+        s <- advance innerstate pristine 
         done s
-    done (Pair innerfold (WaitingM waiting)) = do
+    done (Pair innerstate (WaitingM waiting)) = do
         s <- TF.runFreeT (waiting EOF)
         case s of
             TF.Pure (Left ()) -> do
-                Foldl.foldM innerfold []
+                innerdone innerstate
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 r <- advancefinal step1 future
-                Foldl.foldM r []
+                innerdone r
             TF.Free _ -> error continuedAfterEOF
-    advancefinal innerfold stream = do
+    advancefinal innerstate stream = do
         r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 advancefinal step1 future
-            TF.Pure (Left ()) -> return innerfold
+            TF.Pure (Left ()) -> return innerstate
             TF.Free _ -> error continuedAfterEOF
 
 
@@ -391,47 +393,49 @@ transvertMIO :: (MonadIO m)
              => TransvertibleMIO m b a -- ^
              -> (forall x . FoldM m a x -> FoldM m b x)
 
-transvertMIO (TransvertibleMIO transducer) somefold = FoldM step begin done
+transvertMIO (TransvertibleMIO transducer) (FoldM innerstep innerbegin innerdone) = FoldM step begin done
     where
-    begin = return (Pair somefold (PristineM (transducer evertedStreamM)))
-    step (Pair innerfold (PristineM pristine)) i = do
-        s <- advance innerfold pristine 
+    begin = do
+        innerbegin' <- innerbegin
+        return (Pair innerbegin' (PristineM (transducer evertedStreamM)))
+    step (Pair innerstate (PristineM pristine)) i = do
+        s <- advance innerstate pristine 
         step s i
-    step (Pair innerfold (WaitingM waiting)) i = do 
+    step (Pair innerstate (WaitingM waiting)) i = do 
         s <- TF.runFreeT (waiting (Input i))
         case s of
             TF.Pure (Left ()) -> error stoppedBeforeEOF
-            TF.Pure (Right (a, nexx)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
-                advance step1 nexx 
-            TF.Free f -> return (Pair innerfold (WaitingM f))
-    advance innerfold stream = do 
+            TF.Pure (Right (a, future)) -> do
+                step1 <- innerstep innerstate a
+                advance step1 future 
+            TF.Free f -> return (Pair innerstate (WaitingM f))
+    advance innerstate stream = do 
         r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Left ()) -> error stoppedBeforeEOF
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 advance step1 future
-            TF.Free f -> return (Pair innerfold (WaitingM f))
-    done (Pair innerfold (PristineM pristine)) = do
-        s <- advance innerfold pristine 
+            TF.Free f -> return (Pair innerstate (WaitingM f))
+    done (Pair innerstate (PristineM pristine)) = do
+        s <- advance innerstate pristine 
         done s
-    done (Pair innerfold (WaitingM waiting)) = do
+    done (Pair innerstate (WaitingM waiting)) = do
         s <- TF.runFreeT (waiting EOF)
         case s of
             TF.Pure (Left ()) -> do
-                Foldl.foldM innerfold []
+                innerdone innerstate
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 r <- advancefinal step1 future
-                Foldl.foldM r []
+                innerdone r
             TF.Free _ -> error continuedAfterEOF
-    advancefinal innerfold stream = do
+    advancefinal innerstate stream = do
         r <- TF.runFreeT (next stream) 
         case r of
             TF.Pure (Right (a,future)) -> do
-                step1 <- Foldl.foldM (Foldl.duplicateM innerfold) [a]
+                step1 <- innerstep innerstate a
                 advancefinal step1 future
-            TF.Pure (Left ()) -> return innerfold
+            TF.Pure (Left ()) -> return innerstate
             TF.Free _ -> error continuedAfterEOF
 
