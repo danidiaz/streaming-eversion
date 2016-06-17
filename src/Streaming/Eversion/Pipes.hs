@@ -10,13 +10,13 @@ module Streaming.Eversion.Pipes (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
-    ,   evertR
-    ,   evertR_
+    ,   evertMR
+    ,   evertMR_
         -- * Producer transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
-    ,   transvertR
+    ,   transvertMR
         -- * Examples
         -- $examples
     ) where
@@ -70,13 +70,13 @@ evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer
           -> FoldM m a () -- ^
 evertMIO_ phi = Streaming.Eversion.evertMIO_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
 
-evertR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m (x,r)) 
+evertMR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m (x,r)) 
          -> FoldM m a x -- ^
-evertR phi = Streaming.Eversion.evertR (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+evertMR phi = Streaming.Eversion.evertMR (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-evertR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m r) 
+evertMR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m r) 
           -> FoldM m a () -- ^
-evertR_ phi = Streaming.Eversion.evertR_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
+evertMR_ phi = Streaming.Eversion.evertMR_ (\stream -> phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream))
 
 transvert :: (forall m r. Monad m => Producer a m r -> Producer b m r)
           -> Fold b x -- ^
@@ -95,11 +95,11 @@ transvertMIO :: MonadIO m
              -> FoldM m a x
 transvertMIO phi = Streaming.Eversion.transvertMIO (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
-transvertR :: MonadResource m 
+transvertMR :: MonadResource m 
              => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> Producer b (t m) r)
              -> FoldM m b x -- ^
              -> FoldM m a x
-transvertR phi = Streaming.Eversion.transvertR (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+transvertMR phi = Streaming.Eversion.transvertMR (\stream -> Streaming.Prelude.unfoldr Pipes.next (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 
 {- $examples
