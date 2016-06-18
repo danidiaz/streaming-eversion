@@ -1,10 +1,8 @@
 0.3.1.0
-=======
 
 - Added functions with MonadResource contraints.
 
 0.3.0.0
-=======
 
 - Implemented the improvements suggested by Michael Thompson here :
 https://groups.google.com/forum/#!topic/haskell-pipes/7n6NPTmxPKY by M.T.
@@ -12,7 +10,6 @@ https://groups.google.com/forum/#!topic/haskell-pipes/7n6NPTmxPKY by M.T.
 having to enable -XImpredicativeTypes.
 
 0.2.0.0
-=======
 
 - Eversible, not Evertible!
 - Removed special purpose error functions.
