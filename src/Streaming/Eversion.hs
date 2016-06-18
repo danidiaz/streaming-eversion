@@ -5,7 +5,7 @@
 {-| Most pull-to-push transformations in this module require functions that are 
     polymorphic over a monad transformer.  
     
-    Because of this, some of the type signatures look internals, but actually many
+    Because of this, some of the type signatures look scary, but actually many
     (suitably polymorphic) operations on 'Stream's will unify with them.
    
     To get "interruptible" operations that can exit early with an error, put a

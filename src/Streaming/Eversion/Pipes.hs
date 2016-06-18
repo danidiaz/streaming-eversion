@@ -24,7 +24,7 @@ module Streaming.Eversion.Pipes (
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 
-import           Streaming(Of(..),MonadResource)
+import           Streaming(MonadResource,strictly)
 import qualified Streaming.Prelude
 import qualified Streaming.Eversion
 import           Pipes
@@ -52,11 +52,11 @@ import           Control.Foldl (Fold(..),FoldM(..))
 
 evert :: (forall m r. Monad m => Producer a m r -> m (x,r)) 
       -> Fold a x -- ^
-evert phi = Streaming.Eversion.evert (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+evert phi = Streaming.Eversion.evert (\stream -> fmap strictly (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 evertM :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m (x,r)) 
        -> FoldM m a x -- ^
-evertM phi = Streaming.Eversion.evertM (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+evertM phi = Streaming.Eversion.evertM (\stream -> fmap strictly (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 evertM_ :: Monad m => (forall t r. (MonadTrans t, Monad (t m)) => Producer a (t m) r -> t m r) 
         -> FoldM m a () -- ^
@@ -64,7 +64,7 @@ evertM_ phi = Streaming.Eversion.evertM_ (\stream -> phi (Pipes.Prelude.unfoldr 
 
 evertMIO :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m (x,r)) 
          -> FoldM m a x -- ^
-evertMIO phi = Streaming.Eversion.evertMIO (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+evertMIO phi = Streaming.Eversion.evertMIO (\stream -> fmap strictly (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Producer a (t m) r -> t m r) 
           -> FoldM m a () -- ^
@@ -72,7 +72,7 @@ evertMIO_ phi = Streaming.Eversion.evertMIO_ (\stream -> phi (Pipes.Prelude.unfo
 
 evertMR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m (x,r)) 
          -> FoldM m a x -- ^
-evertMR phi = Streaming.Eversion.evertMR (\stream -> fmap (\(x,r) -> x :> r) (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
+evertMR phi = Streaming.Eversion.evertMR (\stream -> fmap strictly (phi (Pipes.Prelude.unfoldr Streaming.Prelude.next stream)))
 
 evertMR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Producer a (t m) r -> t m r) 
           -> FoldM m a () -- ^

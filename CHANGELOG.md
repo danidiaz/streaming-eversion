@@ -1,7 +1,7 @@
 0.3.1.0
 =======
 
-- Added MonadResource functions.
+- Added functions with MonadResource contraints.
 
 0.3.0.0
 =======
