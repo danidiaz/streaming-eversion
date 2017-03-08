@@ -33,7 +33,6 @@ import           Control.Foldl (Fold(..),FoldM(..))
 
 {- $setup
 >>> :set -XOverloadedStrings
->>> import           Control.Error
 >>> import           Control.Monad
 >>> import           Control.Monad.Trans.Except
 >>> import           Control.Foldl (Fold(..),FoldM(..))
