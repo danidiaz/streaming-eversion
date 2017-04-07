@@ -101,6 +101,12 @@ tests = testGroup "tests"
                                              S.yield 11 *> S.yield 22 *> rest) Foldl.list) 
                         [2,3,4,5,6])
         ,   testCaseEq
+            "dropnprefix2"
+            ([11,22]::[Integer])
+            (Foldl.fold (transvert (\s -> do rest <- lift $ S.effects (S.splitAt 4 s)
+                                             S.yield 11 *> S.yield 22 *> rest) Foldl.list) 
+                        [2,3])
+        ,   testCaseEq
             "group"
             ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
             (Foldl.fold (transvert (mapped S.toList . S.group) Foldl.list) [1,1,2,2,2,3,3,3])
