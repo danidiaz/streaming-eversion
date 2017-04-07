@@ -83,6 +83,24 @@ tests = testGroup "tests"
             ([1,2,3,4,5,6]::[Integer])
             (Foldl.fold (transvert (\s -> S.yield 1 *> S.yield 2 *> s <* S.yield 5 <* S.yield 6) Foldl.list) [3,4])
         ,   testCaseEq
+            "dropnprefixmore"
+            ([11,22,33,44,5,6]::[Integer])
+            (Foldl.fold (transvert (\s -> do rest <- lift $ S.effects (S.splitAt 3 s)
+                                             S.yield 11 *> S.yield 22 *> S.yield 33 *> S.yield 44 *> rest) Foldl.list) 
+                        [2,3,4,5,6])
+        ,   testCaseEq
+            "dropnprefixsame"
+            ([11,22,33,5,6]::[Integer])
+            (Foldl.fold (transvert (\s -> do rest <- lift $ S.effects (S.splitAt 3 s)
+                                             S.yield 11 *> S.yield 22 *> S.yield 33 *> rest) Foldl.list) 
+                        [2,3,4,5,6])
+        ,   testCaseEq
+            "dropnprefixless"
+            ([11,22,5,6]::[Integer])
+            (Foldl.fold (transvert (\s -> do rest <- lift $ S.effects (S.splitAt 3 s)
+                                             S.yield 11 *> S.yield 22 *> rest) Foldl.list) 
+                        [2,3,4,5,6])
+        ,   testCaseEq
             "group"
             ([[1,1],[2,2,2],[3,3,3]]::[[Integer]])
             (Foldl.fold (transvert (mapped S.toList . S.group) Foldl.list) [1,1,2,2,2,3,3,3])
