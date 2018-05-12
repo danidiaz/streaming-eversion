@@ -1,5 +1,5 @@
 Name: streaming-eversion
-Version: 0.3.1.1
+Version: 0.4.0.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 License: BSD3
@@ -26,9 +26,9 @@ Library
     Build-Depends:
         base             >= 4.8      && < 5,
         transformers     >= 0.4.0.0        ,
-        foldl            >= 1.1.5          ,
+        foldl            >= 1.4.0          ,
         pipes            >= 4.1.0          ,
-        streaming        >= 0.1.4.2        
+        streaming        >= 0.2.0.0        
     Exposed-Modules:
         Streaming.Eversion
         Streaming.Eversion.Pipes
@@ -48,6 +48,7 @@ test-suite doctests
         pipes-bytestring >= 2.1.1          ,
         streaming        >= 0.1.4.2        ,       
         microlens        >= 0.4.2.1        
+
 test-suite tests
   type:           exitcode-stdio-1.0
   ghc-options:    -Wall -threaded

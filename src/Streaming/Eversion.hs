@@ -1,7 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-
 {-| Most pull-to-push transformations in this module require functions that are 
     polymorphic over a monad transformer.  
     
@@ -24,13 +23,10 @@ module Streaming.Eversion (
     ,   evertM_
     ,   evertMIO
     ,   evertMIO_
-    ,   evertMR
-    ,   evertMR_
         -- * Stream transformations 
     ,   transvert
     ,   transvertM
     ,   transvertMIO
-    ,   transvertMR
         -- * Internals
 --    ,   Feed(..)
     ,   generalEvertM
@@ -39,7 +35,7 @@ module Streaming.Eversion (
 
 import           Prelude 
 import           Control.Foldl (Fold(..),FoldM(..),generalize,simplify)
-import           Streaming (Stream,Of(..),Sum(..),inspect,unseparate,MonadResource)
+import           Streaming (Stream,Of(..),Sum(..),inspect,unseparate)
 import           Streaming.Internal
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -50,7 +46,7 @@ import           Control.Monad.Trans.Class
 >>> import           Control.Monad.Trans.Identity
 >>> import           Control.Foldl (Fold(..),FoldM(..))
 >>> import qualified Control.Foldl as L
->>> import           Streaming (Stream,Of(..),MonadResource,runResourceT)
+>>> import           Streaming (Stream,Of(..))
 >>> import           Streaming.Prelude (yield,next,for)
 >>> import qualified Streaming.Prelude as S
 -}
@@ -119,20 +115,6 @@ evertMIO_ :: MonadIO m => (forall t r. (MonadTrans t, MonadIO (t m)) => Stream (
           -> FoldM m a () -- ^
 evertMIO_ phi = evertMIO (fmap (fmap ((:>) ())) phi)
 
-evertMR :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m (Of x r)) 
-       -> FoldM m a x -- ^
-evertMR phi = generalEvertM phi
-
-{-| 
- 
->>> runResourceT (L.foldM (evertMR_ (S.writeFile "/dev/null")) ["aaa","bbb"]) 
-
--}
-evertMR_ :: MonadResource m => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> t m r) 
-        -> FoldM m a () -- ^
-evertMR_ phi = evertMR (fmap (fmap ((:>) ())) phi)
-
-
 generalEvertM :: (Monad m) 
               => (forall r. Stream (Of a) (Stream ((->) (Feed a)) m) r -> Stream ((->) (Feed a)) m (Of b r))
               -> FoldM m a b -- ^
@@ -169,12 +151,6 @@ transvertMIO :: MonadIO m
              -> FoldM m b x -- ^
              -> FoldM m a x
 transvertMIO phi = generalTransvertM phi
-
-transvertMR  :: MonadResource m 
-            => (forall t r. (MonadTrans t, MonadResource (t m)) => Stream (Of a) (t m) r -> Stream (Of b) (t m) r)
-            -> FoldM m b x -- ^
-            -> FoldM m a x
-transvertMR phi = generalTransvertM phi
 
 data Pair a b = Pair !a !b
 

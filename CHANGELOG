@@ -1,3 +1,8 @@
+0.4.0.0
+
+- Bumped lower bounds for "streaming" and "foldl".
+- Removed functions with MonadResource constraints.
+
 0.3.1.0
 
 - Added functions with MonadResource contraints.
